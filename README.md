@@ -1,5 +1,5 @@
 # ANDRACORP
-
+![System Diagram](https://github.com/Andradem11/AndraCorp/blob/main/AndraCorp%20Diagram.png)
 Overview:
 
 	-AndraCrop is a web-based construction project management and decision support system designed for contractors and clients.
