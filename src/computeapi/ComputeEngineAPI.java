@@ -1,4 +1,9 @@
 package computeapi;
+import computemodel.CostImpact;
+import computemodel.DelayForecast;
+import computemodel.ReallocationResult;
+import computemodel.ScheduleImpact;
+
 /*
  * The Compute Engine analyzes project information 
  * and produces estimates or simulations related to:
