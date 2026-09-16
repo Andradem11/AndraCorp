@@ -131,5 +131,26 @@ The client may request that the kitchen be completed sooner
 #Week 2
 
 I started setting up the backend structure based on my system diagram. I created the main APIs and method prototypes for authentication, project management, workforce management, materials and equipment, expenses and budgets, change orders, reports and notifications, the compute engine, and data storage. I also initiated the Compute Engine structure with the ComputeEngineAPI, ComputationComponent, and JobManager. Some of the classes are not implemented yet and will be added later on.	
-	
+
+#Week 3
+I created the main model and data classes for AndraCorp based on the system diagram and the APIs created in Week 2. These classes represent the main data that will be used throughout the system.
+
+The model classes include:
+- Users
+- Projects
+- Workers
+- Work hours
+- Materials
+- Equipment
+- Expenses
+- Change orders
+- Schedules and tasks
+- Daily reports
+- Photos
+- Payments
+- Audit logs
+
+I also created the data classes needed for the Compute Engine. These classes will be used to represent project data, schedule and cost impacts, worker reallocation requests/results, delay forecasts, and computation jobs.
+
+The model and data classes created this week will be used for the prototype implementations in Week 4.
 
