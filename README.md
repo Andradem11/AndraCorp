@@ -1,5 +1,5 @@
 # ANDRACORP
-![System Diagram](https://github.com/Andradem11/AndraCorp/blob/main/AndraCorp%20Diagram.png)
+![System Diagram](https://github.com/Andradem11/AndraCorp/blob/main/AndraCorp%20Diagram.png?raw=true)
 Overview:
 
 	-AndraCrop is a web-based construction project management and decision support system designed for contractors and clients.
@@ -128,6 +128,8 @@ The client may request that the kitchen be completed sooner
 						- Living Room completion: no delay
 						- Additional labor cost: calculated by the system
 	
-	
+#Week 2
+
+I started setting up the backend structure based on my system diagram. I created the main APIs and method prototypes for authentication, project management, workforce management, materials and equipment, expenses and budgets, change orders, reports and notifications, the compute engine, and data storage. I also initiated the Compute Engine structure with the ComputeEngineAPI, ComputationComponent, and JobManager. Some of the classes are not implemented yet and will be added later on.	
 	
 
