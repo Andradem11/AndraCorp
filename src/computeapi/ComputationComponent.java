@@ -1,10 +1,16 @@
 package computeapi;
+import computemodel.CostImpact;
+import computemodel.DelayForecast;
+import computemodel.ProjectData;
+import computemodel.ReallocationRequest;
+import computemodel.ReallocationResult;
+import computemodel.ScheduleImpact;
+
 /*
  * The Job Manager manages computation requests,
  * while the ComputationComponent performs the calculations
  * requested through the Compute Engine.
  */
-
 public interface ComputationComponent {
 //	Determines how the project schedule changes.
 	ScheduleImpact calculateScheduleImpact(

@@ -1,4 +1,9 @@
 package computeapi;
+
+import computemodel.ComputationJob;
+import computemodel.ComputationResult;
+import computemodel.ComputationStatus;
+
 /*
  * Its responsibility is to receive computation requests,
  * manage them, and return their results.
