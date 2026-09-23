@@ -154,3 +154,20 @@ I also created the data classes needed for the Compute Engine. These classes wil
 
 The model and data classes created this week will be used for the prototype implementations in Week 4.
 
+#Week 4
+I started implementing the main prototype components for AndraCorp using the APIs and model classes created in Weeks 2 and 3.
+
+The prototype implementations include:
+
+	-Project Management: Create, update, retrieve, and delete projects.
+	-User Management: Create and manage contractor and client accounts.
+	-Workforce Management: Add workers, assign and reassign them to project tasks, and record work hours.
+	-Expenses and Budgets: Record project expenses and calculate remaining budgets.
+	-Change Orders: Create change requests and allow clients to approve or decline them.
+
+I created a new applicationimpl package to separate the implementations from the API interfaces. For now, I used HashMaps and ArrayLists to temporarily store information until I implement the database.
+
+I also added JUnit 5 smoke tests to test the basic functionality of each component and updated the Gradle configuration to include the JUnit Platform launcher.
+
+The next step is to implement the storage component and connect it to the prototype implementations.
+

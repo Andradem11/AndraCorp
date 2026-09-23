@@ -1,4 +1,6 @@
 package applicationapi;
+import model.Project;
+
 /*
  * This interface is responsible for:
  * Contractors will mainly create and modify projects.
@@ -16,7 +18,7 @@ public interface ProjectManagementAPI {
 			String cleintId);
 	
 //	Updates general project information.
-	boolean updateProject(String projectId);
+	boolean updateProject(Project projectId);
 	
 //	Removes a project from the system.
 	boolean deleteProject(String projectId);
