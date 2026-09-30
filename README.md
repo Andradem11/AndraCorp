@@ -171,3 +171,16 @@ I also added JUnit 5 smoke tests to test the basic functionality of each compone
 
 The next step is to implement the storage component and connect it to the prototype implementations.
 
+#Week 5
+Connected the Workforce Management component to the Java backend and SQLite database and started working on the AndraCorp frontend using React.
+I  updated the backend by adding GET and POST endpoints to retrieve and create workers. I also updated WorkforceManagementAPI and WorkforceManagementImpl and created WorkerRequest to handle the information sent from the frontend.
+
+	- Connected the dashboard to the Java backend to retrieve projects and workers from SQLite.
+	- Updated the dashboard to display the total number of workers and the number of workers assigned to each project.
+	- Added navigation between the Dashboard and Workforce pages.
+	- Created a Workforce page where contractors can view workers, their trades, and their assigned projects.
+	- Implemented an Add Worker form that allows contractors to add workers and assign them to existing projects.
+	- Updated the form styling to match the existing frontend design.
+
+I also added and ran JUnit 5 smoke tests for the backend components implemented in the previous weeks, including Project Management, User Management, Workforce Management, Expenses and Budgets, Change Orders, and Storage.
+I tested the GET and POST endpoints to verify that workers can be created and retrieved from SQLite, also tested the React frontend to make sure that projects and workers are displayed correctly, worker counts are updated, and the information remains saved after refreshing the application.
