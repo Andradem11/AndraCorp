@@ -1,28 +1,21 @@
 package applicationimpl;
 
 import applicationapi.ExpenseBudgetAPI;
-import model.Expense;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import storageimpl.DatabaseManager;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.UUID;
 
 /*
- * Prototype implementation of expenses and budgets.
- * Calculates project spending and remaining budgets.
+ * Implementation of expenses and budgets.
+ * Uses SQLite to store project expenses
+ * and manage project budgets.
  */
-
 public class ExpenseBudgetImpl
         implements ExpenseBudgetAPI {
-
-//  Stores expenses for each project.
-    private Map<String, List<Expense>> expenses =
-            new HashMap<>();
-
-//  Stores the budget for each project.
-    private Map<String, Double> budgets =
-            new HashMap<>();
 
 //  Adds an expense to a project.
     @Override
@@ -31,49 +24,101 @@ public class ExpenseBudgetImpl
             String description,
             double amount) {
 
-        if (!Double.isFinite(amount) || amount < 0) {
+        if (!Double.isFinite(amount) ||
+                amount < 0) {
             return null;
         }
 
         String expenseId =
                 UUID.randomUUID().toString();
 
-        Expense expense = new Expense(
-                expenseId,
-                projectId,
-                description,
-                amount);
+        String sql = """
+                INSERT INTO expenses (
+                    expense_id,
+                    project_id,
+                    description,
+                    amount
+                )
+                VALUES (?, ?, ?, ?);
+                """;
 
-//      Creates an expense list if one doesn't exist.
-        expenses.computeIfAbsent(
-                projectId,
-                id -> new ArrayList<>()
-        ).add(expense);
+        try (Connection connection =
+                     DatabaseManager.getConnection();
 
-        return expenseId;
+             PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+//          Stores the expense information in SQLite.
+            statement.setString(
+                    1,
+                    expenseId);
+
+            statement.setString(
+                    2,
+                    projectId);
+
+            statement.setString(
+                    3,
+                    description);
+
+            statement.setDouble(
+                    4,
+                    amount);
+
+            statement.executeUpdate();
+
+            return expenseId;
+
+        } catch (SQLException e) {
+
+            System.out.println(
+                    "Could not add expense: "
+                            + e.getMessage());
+
+            return null;
+        }
     }
 
-//  Calculates the total project expenses.
+//  Calculates the total expenses for a project.
     @Override
-    public double getProjectExpenses(String projectId) {
+    public double getProjectExpenses(
+            String projectId) {
 
-        double total = 0;
+        String sql = """
+                SELECT SUM(amount) AS total
+                FROM expenses
+                WHERE project_id = ?;
+                """;
 
-        List<Expense> projectExpenses =
-                expenses.get(projectId);
+        try (Connection connection =
+                     DatabaseManager.getConnection();
 
-        if (projectExpenses == null) {
-            return 0;
+             PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+            statement.setString(
+                    1,
+                    projectId);
+
+            try (ResultSet result =
+                         statement.executeQuery()) {
+
+                if (result.next()) {
+                    return result.getDouble("total");
+                }
+            }
+
+        } catch (SQLException e) {
+
+            System.out.println(
+                    "Could not retrieve project expenses: "
+                            + e.getMessage());
         }
 
-        for (Expense expense : projectExpenses) {
-            total += expense.getAmount();
-        }
-
-        return total;
+        return 0;
     }
 
-//  Updates the total project budget.
+//  Updates the project's total budget.
     @Override
     public boolean updateProjectBudget(
             String projectId,
@@ -84,22 +129,82 @@ public class ExpenseBudgetImpl
             return false;
         }
 
-        budgets.put(projectId, newBudget);
+        String sql = """
+                UPDATE projects
+                SET budget = ?
+                WHERE project_id = ?;
+                """;
 
-        return true;
+        try (Connection connection =
+                     DatabaseManager.getConnection();
+
+             PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+            statement.setDouble(
+                    1,
+                    newBudget);
+
+            statement.setString(
+                    2,
+                    projectId);
+
+            return statement.executeUpdate() > 0;
+
+        } catch (SQLException e) {
+
+            System.out.println(
+                    "Could not update project budget: "
+                            + e.getMessage());
+
+            return false;
+        }
     }
 
-//  Calculates the remaining budget.
+//  Calculates the remaining project budget.
     @Override
-    public double getRemainingBudget(String projectId) {
+    public double getRemainingBudget(
+            String projectId) {
 
-        double budget =
-                budgets.getOrDefault(projectId, 0.0);
+        String sql = """
+                SELECT budget
+                FROM projects
+                WHERE project_id = ?;
+                """;
 
-        double totalExpenses =
-                getProjectExpenses(projectId);
+        try (Connection connection =
+                     DatabaseManager.getConnection();
 
-        return budget - totalExpenses;
+             PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+            statement.setString(
+                    1,
+                    projectId);
+
+            try (ResultSet result =
+                         statement.executeQuery()) {
+
+                if (!result.next()) {
+                    return 0;
+                }
+
+                double budget =
+                        result.getDouble("budget");
+
+                double expenses =
+                        getProjectExpenses(projectId);
+
+                return budget - expenses;
+            }
+
+        } catch (SQLException e) {
+
+            System.out.println(
+                    "Could not calculate remaining budget: "
+                            + e.getMessage());
+
+            return 0;
+        }
     }
-
 }

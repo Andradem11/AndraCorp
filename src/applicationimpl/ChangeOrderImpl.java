@@ -1,29 +1,23 @@
-
 package applicationimpl;
 
 import applicationapi.ChangeOrderAPI;
-import model.ChangeOrder;
-import java.util.HashMap;
-import java.util.Map;
+import storageimpl.DatabaseManager;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.UUID;
 
 /*
- * Prototype implementation of change orders.
- * Handles client requests and approval decisions.
+ * Implementation of change order management.
+ * Uses SQLite to store contractor change orders
+ * and client change requests.
  */
-
 public class ChangeOrderImpl
         implements ChangeOrderAPI {
 
-//  Stores change orders using their IDs.
-    private Map<String, ChangeOrder> changeOrders =
-            new HashMap<>();
-
-    // Stores the client associated with each request.
-    private Map<String, String> clientRequests =
-            new HashMap<>();
-
-//  Creates a new change order.
+//  Creates a new change order for a project.
     @Override
     public String createChangeOrder(
             String projectId,
@@ -32,33 +26,144 @@ public class ChangeOrderImpl
         String changeOrderId =
                 UUID.randomUUID().toString();
 
-        ChangeOrder order = new ChangeOrder(
-                changeOrderId,
-                projectId,
-                description);
+        String sql = """
+                INSERT INTO change_orders (
+                    change_order_id,
+                    project_id,
+                    client_id,
+                    description,
+                    status,
+                    estimated_cost_impact,
+                    estimated_schedule_impact
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?);
+                """;
 
-        changeOrders.put(changeOrderId, order);
+        try (Connection connection =
+                     DatabaseManager.getConnection();
 
-        return changeOrderId;
+             PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+//          Stores the change order in SQLite.
+            statement.setString(
+                    1,
+                    changeOrderId);
+
+            statement.setString(
+                    2,
+                    projectId);
+
+            statement.setString(
+                    3,
+                    null);
+
+            statement.setString(
+                    4,
+                    description);
+
+            statement.setString(
+                    5,
+                    "PENDING");
+
+            statement.setDouble(
+                    6,
+                    0);
+
+            statement.setInt(
+                    7,
+                    0);
+
+            statement.executeUpdate();
+
+            return changeOrderId;
+
+        } catch (SQLException e) {
+
+            System.out.println(
+                    "Could not create change order: "
+                            + e.getMessage());
+
+            return null;
+        }
     }
 
-//  Allows a client to request a project change.
+//  Creates a change request submitted by a client.
     @Override
     public String requestChange(
             String projectId,
             String clientId,
             String description) {
 
-        if (clientId == null || clientId.isBlank()) {
+        if (clientId == null ||
+                clientId.isBlank()) {
+
             return null;
         }
 
         String changeOrderId =
-                createChangeOrder(projectId, description);
+                UUID.randomUUID().toString();
 
-        clientRequests.put(changeOrderId, clientId);
+        String sql = """
+                INSERT INTO change_orders (
+                    change_order_id,
+                    project_id,
+                    client_id,
+                    description,
+                    status,
+                    estimated_cost_impact,
+                    estimated_schedule_impact
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?);
+                """;
 
-        return changeOrderId;
+        try (Connection connection =
+                     DatabaseManager.getConnection();
+
+             PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+//          Stores the client's request in SQLite.
+            statement.setString(
+                    1,
+                    changeOrderId);
+
+            statement.setString(
+                    2,
+                    projectId);
+
+            statement.setString(
+                    3,
+                    clientId);
+
+            statement.setString(
+                    4,
+                    description);
+
+            statement.setString(
+                    5,
+                    "PENDING");
+
+            statement.setDouble(
+                    6,
+                    0);
+
+            statement.setInt(
+                    7,
+                    0);
+
+            statement.executeUpdate();
+
+            return changeOrderId;
+
+        } catch (SQLException e) {
+
+            System.out.println(
+                    "Could not request change: "
+                            + e.getMessage());
+
+            return null;
+        }
     }
 
 //  Approves a pending client change request.
@@ -67,19 +172,10 @@ public class ChangeOrderImpl
             String changeOrderId,
             String clientId) {
 
-        ChangeOrder order =
-                changeOrders.get(changeOrderId);
-
-        if (order == null ||
-                !clientId.equals(
-                        clientRequests.get(changeOrderId)) ||
-                !order.getStatus().equals("PENDING")) {
-            return false;
-        }
-
-        order.setStatus("APPROVED");
-
-        return true;
+        return updateStatus(
+                changeOrderId,
+                clientId,
+                "APPROVED");
     }
 
 //  Declines a pending client change request.
@@ -88,40 +184,105 @@ public class ChangeOrderImpl
             String changeOrderId,
             String clientId) {
 
-        ChangeOrder order =
-                changeOrders.get(changeOrderId);
+        return updateStatus(
+                changeOrderId,
+                clientId,
+                "DECLINED");
+    }
 
-        if (order == null ||
-                !clientId.equals(
-                        clientRequests.get(changeOrderId)) ||
-                !order.getStatus().equals("PENDING")) {
+//  Updates the status of a pending change order.
+    private boolean updateStatus(
+            String changeOrderId,
+            String clientId,
+            String newStatus) {
+
+        String sql = """
+                UPDATE change_orders
+                SET status = ?
+                WHERE change_order_id = ?
+                AND client_id = ?
+                AND status = 'PENDING';
+                """;
+
+        try (Connection connection =
+                     DatabaseManager.getConnection();
+
+             PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+            statement.setString(
+                    1,
+                    newStatus);
+
+            statement.setString(
+                    2,
+                    changeOrderId);
+
+            statement.setString(
+                    3,
+                    clientId);
+
+            return statement.executeUpdate() > 0;
+
+        } catch (SQLException e) {
+
+            System.out.println(
+                    "Could not update change order: "
+                            + e.getMessage());
+
             return false;
         }
-
-        order.setStatus("DECLINED");
-
-        return true;
     }
 
-//  Retrieves basic change order information.
+//  Retrieves information about a change order.
     @Override
-    public String getChangeOrder(String changeOrderId) {
+    public String getChangeOrder(
+            String changeOrderId) {
 
-        ChangeOrder order =
-                changeOrders.get(changeOrderId);
+        String sql = """
+                SELECT *
+                FROM change_orders
+                WHERE change_order_id = ?;
+                """;
 
-        if (order == null) {
+        try (Connection connection =
+                     DatabaseManager.getConnection();
+
+             PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+            statement.setString(
+                    1,
+                    changeOrderId);
+
+            try (ResultSet result =
+                         statement.executeQuery()) {
+
+                if (!result.next()) {
+                    return null;
+                }
+
+                return "Description: "
+                        + result.getString(
+                                "description")
+                        + "\nStatus: "
+                        + result.getString(
+                                "status")
+                        + "\nEstimated Cost Impact: "
+                        + result.getDouble(
+                                "estimated_cost_impact")
+                        + "\nEstimated Schedule Impact: "
+                        + result.getInt(
+                                "estimated_schedule_impact");
+            }
+
+        } catch (SQLException e) {
+
+            System.out.println(
+                    "Could not retrieve change order: "
+                            + e.getMessage());
+
             return null;
         }
-
-        return "Change Order: "
-                + order.getDescription()
-                + "\nStatus: "
-                + order.getStatus()
-                + "\nEstimated Cost Impact: "
-                + order.getEstimatedCostImpact()
-                + "\nEstimated Schedule Impact: "
-                + order.getEstimatedScheduleImpact();
     }
-
 }
