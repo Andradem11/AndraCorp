@@ -1,4 +1,6 @@
 package applicationapi;
+import java.util.List;
+
 import model.Project;
 
 /*
@@ -25,4 +27,7 @@ public interface ProjectManagementAPI {
 	
 //	Retrieves information about a specific project.
 	String getProject(String projectId);
+	
+//  Returns all projects stored in the system.
+	List<Project> getAllProjects();
 }

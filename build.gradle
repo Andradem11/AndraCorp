@@ -1,4 +1,3 @@
-
 plugins {
     id 'java'
     id 'eclipse'
@@ -9,6 +8,20 @@ repositories {
 }
 
 dependencies {
+
+    // SQLite JDBC driver
+    implementation 'org.xerial:sqlite-jdbc:3.46.1.0'
+
+    // Lightweight HTTP server for the React frontend
+    implementation 'io.javalin:javalin:6.7.0'
+
+    // Console logging for Javalin
+    implementation 'org.slf4j:slf4j-simple:2.0.16'
+    
+    // Converts Java objects to and from JSON
+	implementation 'com.fasterxml.jackson.core:jackson-databind:2.18.3'
+
+    // JUnit 5 testing
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.10.2'
 }

@@ -2,28 +2,24 @@ package applicationimpl;
 
 import applicationapi.WorkforceManagementAPI;
 import model.Worker;
-import model.WorkHours;
+import storageimpl.DatabaseManager;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 /*
- * Prototype implementation of workforce management.
- * Handles workers, assignments, and work hours.
+ * Implementation of workforce management.
+ * Uses SQLite to store workers, assignments,
+ * and recorded work hours.
  */
-
 public class WorkforceManagementImpl
         implements WorkforceManagementAPI {
 
-//  Stores workers using their IDs.
-    private Map<String, Worker> workers =
-            new HashMap<>();
-
-//  Stores recorded work hours.
-    private List<WorkHours> workHours =
-            new ArrayList<>();
 
 //  Adds a worker to a project.
     @Override
@@ -35,16 +31,63 @@ public class WorkforceManagementImpl
         String workerId =
                 UUID.randomUUID().toString();
 
-        Worker worker = new Worker(
-                workerId,
-                projectId,
-                workerName,
-                trade);
+        String sql = """
+                INSERT INTO workers (
+                    worker_id,
+                    project_id,
+                    worker_name,
+                    trade,
+                    area,
+                    task_id
+                )
+                VALUES (?, ?, ?, ?, ?, ?);
+                """;
 
-        workers.put(workerId, worker);
+        try (Connection connection =
+                     DatabaseManager.getConnection();
 
-        return workerId;
+             PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+//          Stores the worker information in SQLite.
+            statement.setString(
+                    1,
+                    workerId);
+
+            statement.setString(
+                    2,
+                    projectId);
+
+            statement.setString(
+                    3,
+                    workerName);
+
+            statement.setString(
+                    4,
+                    trade);
+
+            statement.setString(
+                    5,
+                    null);
+
+            statement.setString(
+                    6,
+                    null);
+
+            statement.executeUpdate();
+
+            return workerId;
+
+        } catch (SQLException e) {
+
+            System.out.println(
+                    "Could not add worker: "
+                            + e.getMessage());
+
+            return null;
+        }
     }
+
 
 //  Assigns a worker to an area and task.
     @Override
@@ -54,18 +97,48 @@ public class WorkforceManagementImpl
             String area,
             String task) {
 
-        Worker worker = workers.get(workerId);
+        String sql = """
+                UPDATE workers
+                SET area = ?,
+                    task_id = ?
+                WHERE worker_id = ?
+                AND project_id = ?;
+                """;
 
-        if (worker == null ||
-                !worker.getProjectId().equals(projectId)) {
+        try (Connection connection =
+                     DatabaseManager.getConnection();
+
+             PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+            statement.setString(
+                    1,
+                    area);
+
+            statement.setString(
+                    2,
+                    task);
+
+            statement.setString(
+                    3,
+                    workerId);
+
+            statement.setString(
+                    4,
+                    projectId);
+
+            return statement.executeUpdate() > 0;
+
+        } catch (SQLException e) {
+
+            System.out.println(
+                    "Could not assign worker: "
+                            + e.getMessage());
+
             return false;
         }
-
-        worker.setArea(area);
-        worker.setTaskId(task);
-
-        return true;
     }
+
 
 //  Moves a worker to another area or task.
     @Override
@@ -74,17 +147,43 @@ public class WorkforceManagementImpl
             String newArea,
             String newTask) {
 
-        Worker worker = workers.get(workerId);
+        String sql = """
+                UPDATE workers
+                SET area = ?,
+                    task_id = ?
+                WHERE worker_id = ?;
+                """;
 
-        if (worker == null) {
+        try (Connection connection =
+                     DatabaseManager.getConnection();
+
+             PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+            statement.setString(
+                    1,
+                    newArea);
+
+            statement.setString(
+                    2,
+                    newTask);
+
+            statement.setString(
+                    3,
+                    workerId);
+
+            return statement.executeUpdate() > 0;
+
+        } catch (SQLException e) {
+
+            System.out.println(
+                    "Could not reassign worker: "
+                            + e.getMessage());
+
             return false;
         }
-
-        worker.setArea(newArea);
-        worker.setTaskId(newTask);
-
-        return true;
     }
+
 
 //  Records the hours worked on a task.
     @Override
@@ -93,49 +192,230 @@ public class WorkforceManagementImpl
             String taskId,
             double hours) {
 
-        Worker worker = workers.get(workerId);
-
-        if (worker == null ||
-                taskId == null ||
+        if (taskId == null ||
                 taskId.isBlank() ||
                 !Double.isFinite(hours) ||
                 hours <= 0) {
+
             return false;
         }
 
-        WorkHours record = new WorkHours(
-                workerId,
-                taskId,
-                hours);
 
-        workHours.add(record);
+//      Makes sure the worker exists before recording hours.
+        if (!workerExists(workerId)) {
+            return false;
+        }
 
-        return true;
+        String sql = """
+                INSERT INTO work_hours (
+                    worker_id,
+                    task_id,
+                    hours
+                )
+                VALUES (?, ?, ?);
+                """;
+
+        try (Connection connection =
+                     DatabaseManager.getConnection();
+
+             PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+            statement.setString(
+                    1,
+                    workerId);
+
+            statement.setString(
+                    2,
+                    taskId);
+
+            statement.setDouble(
+                    3,
+                    hours);
+
+            return statement.executeUpdate() > 0;
+
+        } catch (SQLException e) {
+
+            System.out.println(
+                    "Could not record work hours: "
+                            + e.getMessage());
+
+            return false;
+        }
     }
+
 
 //  Retrieves workers assigned to a project.
     @Override
-    public String getProjectWorkforce(String projectId) {
+    public String getProjectWorkforce(
+            String projectId) {
 
-        StringBuilder result = new StringBuilder();
+        String sql = """
+                SELECT *
+                FROM workers
+                WHERE project_id = ?;
+                """;
 
-        for (Worker worker : workers.values()) {
+        StringBuilder result =
+                new StringBuilder();
 
-            if (worker.getProjectId().equals(projectId)) {
+        try (Connection connection =
+                     DatabaseManager.getConnection();
 
-                result.append("Worker: ")
-                      .append(worker.getWorkerName())
-                      .append("\nTrade: ")
-                      .append(worker.getTrade())
-                      .append("\nArea: ")
-                      .append(worker.getArea())
-                      .append("\nTask: ")
-                      .append(worker.getTaskId())
-                      .append("\n\n");
+             PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+            statement.setString(
+                    1,
+                    projectId);
+
+            try (ResultSet workers =
+                         statement.executeQuery()) {
+
+                while (workers.next()) {
+
+                    result.append("Worker: ")
+                            .append(
+                                    workers.getString(
+                                            "worker_name"))
+
+                            .append("\nTrade: ")
+                            .append(
+                                    workers.getString(
+                                            "trade"))
+
+                            .append("\nArea: ")
+                            .append(
+                                    workers.getString(
+                                            "area"))
+
+                            .append("\nTask: ")
+                            .append(
+                                    workers.getString(
+                                            "task_id"))
+
+                            .append("\n\n");
+                }
             }
-        }
 
-        return result.toString();
+            return result.toString();
+
+        } catch (SQLException e) {
+
+            System.out.println(
+                    "Could not retrieve workforce: "
+                            + e.getMessage());
+
+            return "";
+        }
     }
 
+
+    /*
+     * Retrieves all workers currently
+     * stored in the SQLite database.
+     */
+    @Override
+    public List<Worker> getAllWorkers() {
+
+        List<Worker> workers =
+                new ArrayList<>();
+
+        String sql = """
+                SELECT *
+                FROM workers;
+                """;
+
+        try (Connection connection =
+                     DatabaseManager.getConnection();
+
+             PreparedStatement statement =
+                     connection.prepareStatement(sql);
+
+             ResultSet result =
+                     statement.executeQuery()) {
+
+
+//          Goes through every worker returned
+//          from the SQLite database.
+            while (result.next()) {
+
+                Worker worker =
+                        new Worker(
+                                result.getString(
+                                        "worker_id"),
+
+                                result.getString(
+                                        "project_id"),
+
+                                result.getString(
+                                        "worker_name"),
+
+                                result.getString(
+                                        "trade"));
+
+
+//              Loads the worker's current
+//              area and task assignment.
+                worker.setArea(
+                        result.getString(
+                                "area"));
+
+                worker.setTaskId(
+                        result.getString(
+                                "task_id"));
+
+
+//              Adds the worker to the list
+//              returned to the backend server.
+                workers.add(worker);
+            }
+
+        } catch (SQLException e) {
+
+            System.out.println(
+                    "Could not retrieve workers: "
+                            + e.getMessage());
+        }
+
+        return workers;
+    }
+
+
+//  Checks whether a worker exists in the database.
+    private boolean workerExists(
+            String workerId) {
+
+        String sql = """
+                SELECT worker_id
+                FROM workers
+                WHERE worker_id = ?;
+                """;
+
+        try (Connection connection =
+                     DatabaseManager.getConnection();
+
+             PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+            statement.setString(
+                    1,
+                    workerId);
+
+            try (ResultSet result =
+                         statement.executeQuery()) {
+
+                return result.next();
+            }
+
+        } catch (SQLException e) {
+
+            System.out.println(
+                    "Could not check worker: "
+                            + e.getMessage());
+
+            return false;
+        }
+    }
 }
