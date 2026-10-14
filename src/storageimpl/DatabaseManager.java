@@ -2,6 +2,7 @@ package storageimpl;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
@@ -25,15 +26,18 @@ public class DatabaseManager {
 //  Creates the database tables if they do not already exist.
     public static void initializeDatabase() {
 
+
 //      Stores contractor and client accounts.
-        String usersTable = """
-                CREATE TABLE IF NOT EXISTS users (
-                    user_id TEXT PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    email TEXT NOT NULL,
-                    role TEXT NOT NULL
-                );
-                """;
+    	String usersTable = """
+    	        CREATE TABLE IF NOT EXISTS users (
+    	            user_id TEXT PRIMARY KEY,
+    	            name TEXT NOT NULL,
+    	            email TEXT NOT NULL,
+    	            phone_number TEXT,
+    	            role TEXT NOT NULL
+    	        );
+    	        """;
+
 
 //      Stores project information.
         String projectsTable = """
@@ -57,17 +61,19 @@ public class DatabaseManager {
                     worker_name TEXT NOT NULL,
                     trade TEXT,
                     area TEXT,
-                    task_id TEXT
+                    task_id TEXT,
+                    is_active INTEGER NOT NULL DEFAULT 1
                 );
                 """;
 
-//      Stores hours recorded by workers.
+//      Stores hours recorded by workers, including the date worked.
         String workHoursTable = """
                 CREATE TABLE IF NOT EXISTS work_hours (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     worker_id TEXT NOT NULL,
                     task_id TEXT NOT NULL,
-                    hours REAL NOT NULL
+                    hours REAL NOT NULL,
+                    work_date TEXT
                 );
                 """;
 
@@ -173,10 +179,87 @@ public class DatabaseManager {
         try (Connection connection = getConnection();
              Statement statement = connection.createStatement()) {
 
-        	statement.execute(usersTable);
-        	statement.execute(projectsTable);
+
+			statement.execute(usersTable);
+			
+			// Adds the phone_number column to existing databases.
+			boolean hasPhoneColumn = false;
+			
+			try (ResultSet result = statement.executeQuery(
+			        "PRAGMA table_info(users)")) {
+			
+			    while (result.next()) {
+			        if ("phone_number".equalsIgnoreCase(
+			                result.getString("name"))) {
+			            hasPhoneColumn = true;
+			            break;
+			        }
+			    }
+			}
+			
+			if (!hasPhoneColumn) {
+			    statement.executeUpdate(
+			            "ALTER TABLE users " +
+			            "ADD COLUMN phone_number TEXT"
+			    );
+			}
+			
+			statement.execute(projectsTable);
+
+        	
         	statement.execute(workersTable);
+
+        	// Adds the is_active column to existing databases.
+        	boolean hasActiveColumn = false;
+
+        	try (ResultSet result = statement.executeQuery(
+        	        "PRAGMA table_info(workers)")) {
+
+        	    while (result.next()) {
+        	        if ("is_active".equalsIgnoreCase(
+        	                result.getString("name"))) {
+
+        	            hasActiveColumn = true;
+        	            break;
+        	        }
+        	    }
+        	}
+
+        	if (!hasActiveColumn) {
+        	    statement.executeUpdate(
+        	        "ALTER TABLE workers " +
+        	        "ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1"
+        	    );
+        	}
+
         	statement.execute(workHoursTable);
+        	
+        	// Adds the work_date column to existing databases.
+        	boolean hasWorkDateColumn = false;
+
+        	try (ResultSet result = statement.executeQuery(
+        	        "PRAGMA table_info(work_hours)")) {
+
+        	    while (result.next()) {
+
+        	        if ("work_date".equalsIgnoreCase(
+        	                result.getString("name"))) {
+
+        	            hasWorkDateColumn = true;
+        	            break;
+        	        }
+        	    }
+        	}
+
+        	if (!hasWorkDateColumn) {
+
+        	    statement.executeUpdate(
+        	            "ALTER TABLE work_hours " +
+        	            "ADD COLUMN work_date TEXT"
+        	    );
+        	}
+        	
+        	
         	statement.execute(expensesTable);
         	statement.execute(changeOrdersTable);
 

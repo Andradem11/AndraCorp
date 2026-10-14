@@ -1,3 +1,4 @@
+
 package applicationimpl;
 
 import applicationapi.UserManagementAPI;
@@ -7,6 +8,9 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /*
@@ -14,62 +18,52 @@ import java.util.UUID;
  * Uses SQLite to store and manage contractor
  * and client accounts.
  */
-public class UserManagementImpl
-        implements UserManagementAPI {
+public class UserManagementImpl implements UserManagementAPI {
 
 //  Creates a new user account.
     @Override
     public String createUser(
             String name,
             String email,
+            String phoneNumber,
             String role) {
 
-        String userId =
-                UUID.randomUUID().toString();
+        if (name == null || name.isBlank()
+                || email == null || email.isBlank()
+                || role == null || role.isBlank()) {
+            return null;
+        }
+
+        String userId = UUID.randomUUID().toString();
 
         String sql = """
                 INSERT INTO users (
                     user_id,
                     name,
                     email,
+                    phone_number,
                     role
                 )
-                VALUES (?, ?, ?, ?);
+                VALUES (?, ?, ?, ?, ?);
                 """;
 
-        try (Connection connection =
-                     DatabaseManager.getConnection();
-
-             PreparedStatement statement =
-                     connection.prepareStatement(sql)) {
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
 
 //          Stores the user information in SQLite.
-            statement.setString(
-                    1,
-                    userId);
-
-            statement.setString(
-                    2,
-                    name);
-
-            statement.setString(
-                    3,
-                    email);
-
-            statement.setString(
-                    4,
-                    role);
+            statement.setString(1, userId);
+            statement.setString(2, name.trim());
+            statement.setString(3, email.trim());
+            statement.setString(4, phoneNumber);
+            statement.setString(5, role.trim().toUpperCase());
 
             statement.executeUpdate();
 
             return userId;
 
         } catch (SQLException e) {
-
             System.out.println(
-                    "Could not create user: "
-                            + e.getMessage());
-
+                    "Could not create user: " + e.getMessage());
             return null;
         }
     }
@@ -84,18 +78,12 @@ public class UserManagementImpl
                 WHERE user_id = ?;
                 """;
 
-        try (Connection connection =
-                     DatabaseManager.getConnection();
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
 
-             PreparedStatement statement =
-                     connection.prepareStatement(sql)) {
+            statement.setString(1, userId);
 
-            statement.setString(
-                    1,
-                    userId);
-
-            try (ResultSet result =
-                         statement.executeQuery()) {
+            try (ResultSet result = statement.executeQuery()) {
 
                 if (!result.next()) {
                     return null;
@@ -105,18 +93,54 @@ public class UserManagementImpl
                         + result.getString("name")
                         + "\nEmail: "
                         + result.getString("email")
+                        + "\nPhone Number: "
+                        + result.getString("phone_number")
                         + "\nRole: "
                         + result.getString("role");
             }
 
         } catch (SQLException e) {
-
             System.out.println(
-                    "Could not retrieve user: "
-                            + e.getMessage());
-
+                    "Could not retrieve user: " + e.getMessage());
             return null;
         }
+    }
+
+//  Retrieves all registered clients from SQLite.
+    @Override
+    public List<Map<String, String>> getAllClients() {
+
+        List<Map<String, String>> clients = new ArrayList<>();
+
+        String sql = """
+                SELECT user_id, name, email, phone_number
+                FROM users
+                WHERE UPPER(role) = 'CLIENT'
+                ORDER BY name;
+                """;
+
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql);
+             ResultSet result = statement.executeQuery()) {
+
+//          Adds each client to the list.
+            while (result.next()) {
+                Map<String, String> client = new java.util.HashMap<>();
+
+                client.put("clientId", result.getString("user_id"));
+                client.put("name", result.getString("name"));
+                client.put("email", result.getString("email"));
+                client.put("phoneNumber", result.getString("phone_number"));
+
+                clients.add(client);
+            }
+
+        } catch (SQLException e) {
+            System.out.println(
+                    "Could not retrieve clients: " + e.getMessage());
+        }
+
+        return clients;
     }
 
 //  Updates basic user information.
@@ -124,41 +148,36 @@ public class UserManagementImpl
     public boolean updateUser(
             String userId,
             String name,
-            String email) {
+            String email,
+            String phoneNumber) {
+
+        if (userId == null || userId.isBlank()
+                || name == null || name.isBlank()
+                || email == null || email.isBlank()) {
+            return false;
+        }
 
         String sql = """
                 UPDATE users
                 SET name = ?,
-                    email = ?
+                    email = ?,
+                    phone_number = ?
                 WHERE user_id = ?;
                 """;
 
-        try (Connection connection =
-                     DatabaseManager.getConnection();
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
 
-             PreparedStatement statement =
-                     connection.prepareStatement(sql)) {
-
-            statement.setString(
-                    1,
-                    name);
-
-            statement.setString(
-                    2,
-                    email);
-
-            statement.setString(
-                    3,
-                    userId);
+            statement.setString(1, name.trim());
+            statement.setString(2, email.trim());
+            statement.setString(3, phoneNumber);
+            statement.setString(4, userId);
 
             return statement.executeUpdate() > 0;
 
         } catch (SQLException e) {
-
             System.out.println(
-                    "Could not update user: "
-                            + e.getMessage());
-
+                    "Could not update user: " + e.getMessage());
             return false;
         }
     }
@@ -167,29 +186,25 @@ public class UserManagementImpl
     @Override
     public boolean deleteUser(String userId) {
 
+        if (userId == null || userId.isBlank()) {
+            return false;
+        }
+
         String sql = """
                 DELETE FROM users
                 WHERE user_id = ?;
                 """;
 
-        try (Connection connection =
-                     DatabaseManager.getConnection();
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
 
-             PreparedStatement statement =
-                     connection.prepareStatement(sql)) {
-
-            statement.setString(
-                    1,
-                    userId);
+            statement.setString(1, userId);
 
             return statement.executeUpdate() > 0;
 
         } catch (SQLException e) {
-
             System.out.println(
-                    "Could not delete user: "
-                            + e.getMessage());
-
+                    "Could not delete user: " + e.getMessage());
             return false;
         }
     }

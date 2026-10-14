@@ -7,6 +7,9 @@ public interface ExpenseBudgetAPI {
             String description,
             double amount);
 	
+//	Removes an expense from a project.
+	boolean removeExpense(String expenseId);
+	
 //	Returns the project's current budget.
 	double getProjectExpenses(String projectId);
 	

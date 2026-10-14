@@ -19,9 +19,6 @@ public class User {
 	public String getUserId() {
 		return userId;
 	}
-	public String getNamw() {
-		return name;
-	}
 	public String getEmail() {
 		return email;
 	}

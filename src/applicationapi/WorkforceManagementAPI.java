@@ -30,11 +30,12 @@ public interface WorkforceManagementAPI {
 	        String newArea,
 	        String newTask);
 
-//	Records the number of hours a worker spent.
+//	Records the hours worked on a task for a selected date.
 	boolean recordWorkHours(
 	        String workerId,
 	        String taskId,
-	        double hours);
+	        double hours,
+	        String workDate);
 
 //	Retrieves summarized work-force information.
 	String getProjectWorkforce(
@@ -42,4 +43,13 @@ public interface WorkforceManagementAPI {
 
 //	Retrieves all workers stored in the system.
 	List<Worker> getAllWorkers();
+	
+//	Deactivates a worker without deleting their work history.
+	boolean deactivateWorker(String workerId);
+	
+//	Reactivates an inactive worker without creating a new record.
+	boolean reactivateWorker(String workerId);
+
+//	Retrieves workers who have been deactivated.
+	List<Worker> getInactiveWorkers();
 }

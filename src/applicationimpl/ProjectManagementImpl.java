@@ -209,39 +209,74 @@ public class ProjectManagementImpl
             return false;
         }
     }
+    
 
-
-//  Deletes a project from SQLite.
+//  Updates the status of an existing project.
     @Override
-    public boolean deleteProject(String projectId) {
+    public boolean updateProjectStatus(
+            String projectId,
+            String status) {
+
+        if (projectId == null || projectId.isBlank() || status == null) {
+            return false;
+        }
+
+        String updatedStatus = status.trim().toUpperCase();
+
+        if (!updatedStatus.equals("ACTIVE")
+                && !updatedStatus.equals("ON_HOLD")
+                && !updatedStatus.equals("COMPLETED")) {
+            return false;
+        }
 
         String sql = """
-                DELETE FROM projects
-                WHERE project_id = ?;
+                UPDATE projects
+                SET status = ?
+                WHERE project_id = ?
+                AND status != 'ARCHIVED';
                 """;
 
-        try (Connection connection =
-                     DatabaseManager.getConnection();
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
 
-             PreparedStatement statement =
-                     connection.prepareStatement(sql)) {
-
-            statement.setString(
-                    1,
-                    projectId);
+            statement.setString(1, updatedStatus);
+            statement.setString(2, projectId);
 
             return statement.executeUpdate() > 0;
 
         } catch (SQLException e) {
-
-            System.out.println(
-                    "Could not delete project: "
-                            + e.getMessage());
-
+            System.out.println("Could not update project status: " + e.getMessage());
             return false;
         }
     }
 
+//  Archives a project without deleting its stored information.
+    @Override
+    public boolean deleteProject(String projectId) {
+
+        if (projectId == null || projectId.isBlank()) {
+            return false;
+        }
+
+        String sql = """
+                UPDATE projects
+                SET status = 'ARCHIVED'
+                WHERE project_id = ?
+                AND status != 'ARCHIVED';
+                """;
+
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            statement.setString(1, projectId);
+
+            return statement.executeUpdate() > 0;
+
+        } catch (SQLException e) {
+            System.out.println("Could not archive project: " + e.getMessage());
+            return false;
+        }
+    }
 
 //  Retrieves basic project information.
     @Override

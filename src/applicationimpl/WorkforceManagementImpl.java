@@ -97,13 +97,14 @@ public class WorkforceManagementImpl
             String area,
             String task) {
 
-        String sql = """
-                UPDATE workers
-                SET area = ?,
-                    task_id = ?
-                WHERE worker_id = ?
-                AND project_id = ?;
-                """;
+    	String sql = """
+    	        UPDATE workers
+    	        SET area = ?,
+    	            task_id = ?
+    	        WHERE worker_id = ?
+    	        AND project_id = ?
+    	        AND is_active = 1;
+    	        """;
 
         try (Connection connection =
                      DatabaseManager.getConnection();
@@ -147,12 +148,13 @@ public class WorkforceManagementImpl
             String newArea,
             String newTask) {
 
-        String sql = """
-                UPDATE workers
-                SET area = ?,
-                    task_id = ?
-                WHERE worker_id = ?;
-                """;
+    	String sql = """
+    	        UPDATE workers
+    	        SET area = ?,
+    	            task_id = ?
+    	        WHERE worker_id = ?
+    	        AND is_active = 1;
+    	        """;
 
         try (Connection connection =
                      DatabaseManager.getConnection();
@@ -185,23 +187,35 @@ public class WorkforceManagementImpl
     }
 
 
-//  Records the hours worked on a task.
+    
+ // Records the hours worked on a task, including the work date.
     @Override
     public boolean recordWorkHours(
             String workerId,
             String taskId,
-            double hours) {
+            double hours,
+            String workDate) {
 
         if (taskId == null ||
                 taskId.isBlank() ||
                 !Double.isFinite(hours) ||
-                hours <= 0) {
+                hours <= 0 ||
+                workDate == null ||
+                workDate.isBlank()) {
 
             return false;
         }
 
+        // Makes sure the date is valid (YYYY-MM-DD).
+        try {
+            java.time.LocalDate.parse(workDate);
 
-//      Makes sure the worker exists before recording hours.
+        } catch (java.time.format.DateTimeParseException e) {
+
+            return false;
+        }
+
+        // Makes sure the worker exists before recording hours.
         if (!workerExists(workerId)) {
             return false;
         }
@@ -210,9 +224,10 @@ public class WorkforceManagementImpl
                 INSERT INTO work_hours (
                     worker_id,
                     task_id,
-                    hours
+                    hours,
+                    work_date
                 )
-                VALUES (?, ?, ?);
+                VALUES (?, ?, ?, ?);
                 """;
 
         try (Connection connection =
@@ -233,6 +248,10 @@ public class WorkforceManagementImpl
                     3,
                     hours);
 
+            statement.setString(
+                    4,
+                    workDate);
+
             return statement.executeUpdate() > 0;
 
         } catch (SQLException e) {
@@ -251,11 +270,12 @@ public class WorkforceManagementImpl
     public String getProjectWorkforce(
             String projectId) {
 
-        String sql = """
-                SELECT *
-                FROM workers
-                WHERE project_id = ?;
-                """;
+    	String sql = """
+    	        SELECT *
+    	        FROM workers
+    	        WHERE project_id = ?
+    	        AND is_active = 1;
+    	        """;
 
         StringBuilder result =
                 new StringBuilder();
@@ -324,7 +344,8 @@ public class WorkforceManagementImpl
 
         String sql = """
                 SELECT *
-                FROM workers;
+                FROM workers
+                WHERE is_active = 1;
                 """;
 
         try (Connection connection =
@@ -390,7 +411,8 @@ public class WorkforceManagementImpl
         String sql = """
                 SELECT worker_id
                 FROM workers
-                WHERE worker_id = ?;
+                WHERE worker_id = ?
+                AND is_active = 1;
                 """;
 
         try (Connection connection =
@@ -417,5 +439,110 @@ public class WorkforceManagementImpl
 
             return false;
         }
+    }
+    
+    @Override
+    public boolean deactivateWorker(String workerId) {
+
+        if (workerId == null || workerId.isBlank()) {
+            return false;
+        }
+
+        String sql = """
+                UPDATE workers
+                SET is_active = 0
+                WHERE worker_id = ?
+                AND is_active = 1
+                """;
+
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            statement.setString(1, workerId);
+
+            return statement.executeUpdate() > 0;
+
+        } catch (SQLException e) {
+
+            System.out.println(
+                    "Error deactivating worker: " + e.getMessage()
+            );
+
+            return false;
+        }
+    }
+    
+ // Reactivates a worker without losing their previous information.
+    @Override
+    public boolean reactivateWorker(String workerId) {
+
+        if (workerId == null || workerId.isBlank()) {
+            return false;
+        }
+
+        String sql = """
+                UPDATE workers
+                SET is_active = 1
+                WHERE worker_id = ?
+                AND is_active = 0;
+                """;
+
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            statement.setString(1, workerId);
+
+            return statement.executeUpdate() > 0;
+
+        } catch (SQLException e) {
+
+            System.out.println(
+                    "Error reactivating worker: " + e.getMessage()
+            );
+
+            return false;
+        }
+    }
+
+
+//  Retrieves all inactive workers from SQLite.
+    @Override
+    public List<Worker> getInactiveWorkers() {
+
+        List<Worker> workers = new ArrayList<>();
+
+        String sql = """
+                SELECT *
+                FROM workers
+                WHERE is_active = 0;
+                """;
+
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql);
+             ResultSet result = statement.executeQuery()) {
+
+            while (result.next()) {
+
+                Worker worker = new Worker(
+                        result.getString("worker_id"),
+                        result.getString("project_id"),
+                        result.getString("worker_name"),
+                        result.getString("trade")
+                );
+
+                worker.setArea(result.getString("area"));
+                worker.setTaskId(result.getString("task_id"));
+
+                workers.add(worker);
+            }
+
+        } catch (SQLException e) {
+
+            System.out.println(
+                    "Could not retrieve inactive workers: " + e.getMessage()
+            );
+        }
+
+        return workers;
     }
 }

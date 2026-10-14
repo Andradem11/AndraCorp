@@ -14,9 +14,11 @@ public interface MaterialEquipmentAPI {
 	boolean updateMaterialQuantity(
             String materialId,
             double quantity);
+//	Removes a material from a project.
+	boolean removeMaterial(String materialId);
 	
 //	Adds equipment to a project.
-	 String addEquipment(
+	String addEquipment(
 	            String projectId,
 	            String equipmentName);
 	 
