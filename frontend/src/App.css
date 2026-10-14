@@ -401,3 +401,15 @@
   outline: none;
   border-color: #f59e0b;
 }
+/* Project actions and responsive header spacing */
+.dashboard-header { flex-wrap: wrap; gap: 16px; }
+.dashboard-header > div { flex: 1 1 320px; min-width: 0; }
+.dashboard-header > button { flex-shrink: 0; }
+.project-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 14px; }
+.project-actions .view-button { padding: 6px 0; }
+.project-actions .danger-action { color: #b42318; }
+.project-action-error { color: #b42318; margin: 12px 0; }
+.archived-project-note { color: #6b7280; margin: 12px 0 0; }
+.project-modal { box-sizing: border-box; max-height: calc(100vh - 40px); overflow-y: auto; }
+.project-modal input { box-sizing: border-box; }
+.project-details strong { overflow-wrap: anywhere; }

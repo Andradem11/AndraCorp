@@ -24,10 +24,12 @@ public class ExpenseBudgetImpl
             String description,
             double amount) {
 
-        if (!Double.isFinite(amount) ||
-                amount < 0) {
-            return null;
-        }
+    	if (projectId == null || projectId.isBlank() ||
+    	        description == null || description.isBlank() ||
+    	        !Double.isFinite(amount) || amount <= 0) {
+
+    	    return null;
+    	}
 
         String expenseId =
                 UUID.randomUUID().toString();
@@ -76,6 +78,30 @@ public class ExpenseBudgetImpl
                             + e.getMessage());
 
             return null;
+        }
+    }
+    
+    @Override
+    public boolean removeExpense(String expenseId) {
+        if (expenseId == null || expenseId.isBlank()) {
+            return false;
+        }
+
+        String sql = """
+                DELETE FROM expenses
+                WHERE expense_id = ?;
+                """;
+
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            statement.setString(1, expenseId);
+
+            return statement.executeUpdate() > 0;
+
+        } catch (SQLException e) {
+            System.out.println("Could not remove expense: " + e.getMessage());
+            return false;
         }
     }
 

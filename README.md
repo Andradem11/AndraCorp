@@ -184,3 +184,18 @@ I  updated the backend by adding GET and POST endpoints to retrieve and create w
 
 I also added and ran JUnit 5 smoke tests for the backend components implemented in the previous weeks, including Project Management, User Management, Workforce Management, Expenses and Budgets, Change Orders, and Storage.
 I tested the GET and POST endpoints to verify that workers can be created and retrieved from SQLite, also tested the React frontend to make sure that projects and workers are displayed correctly, worker counts are updated, and the information remains saved after refreshing the application.
+
+#Week 7
+I continued improving the contractor interface by adding more functionality to Workforce Management.
+I worked on the following features:
+
+	Worker Deactivation: deactivate workers without deleting their information from the database.
+	Worker Reactivation: view inactive workers and reactivate them.
+	Work Hours: record the hours workers spend on assigned tasks.
+	Work Dates: manually select the date when recording work hours.
+	Work History: display the work date, assigned task, and hours recorded.
+	
+
+
+
+
