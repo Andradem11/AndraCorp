@@ -32,7 +32,10 @@ public interface ProjectManagementAPI {
     boolean deleteProject(String projectId);
 
     // Retrieves information about a specific project.
-    String getProject(String projectId);
+    Project getProject(String projectId);
+
+    // Retrieves all projects assigned to a client.
+    List<Project> getProjectsByClient(String clientId);
 
     // Returns all projects stored in the system.
     List<Project> getAllProjects();

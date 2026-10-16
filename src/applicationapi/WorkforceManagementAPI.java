@@ -1,6 +1,7 @@
 package applicationapi;
 
 import java.util.List;
+import java.util.Map;
 
 import model.Worker;
 
@@ -36,6 +37,9 @@ public interface WorkforceManagementAPI {
 	        String taskId,
 	        double hours,
 	        String workDate);
+	
+//	Retrieves all recorded work hours for a worker.
+	List<Map<String, Object>> getWorkerHours(String workerId);
 
 //	Retrieves summarized work-force information.
 	String getProjectWorkforce(

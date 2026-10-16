@@ -1,20 +1,15 @@
 package server;
 
+import applicationimpl.ChangeOrderImpl;
 import applicationimpl.ExpenseBudgetImpl;
 import applicationimpl.MaterialEquipmentImpl;
 import applicationimpl.ProjectManagementImpl;
 import applicationimpl.UserManagementImpl;
 import applicationimpl.WorkforceManagementImpl;
 import io.javalin.Javalin;
+import model.ChangeOrder;
 import storageimpl.DatabaseManager;
-
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 /*
@@ -30,7 +25,6 @@ public class AndraCorpServer {
 //      before starting the backend.
         DatabaseManager.initializeDatabase();
 
-
 //      Creates the project management components.
         ProjectManagementImpl projectManager =
                 new ProjectManagementImpl();
@@ -42,14 +36,15 @@ public class AndraCorpServer {
         MaterialEquipmentImpl materialManager =
                 new MaterialEquipmentImpl();
 
-
 //      Creates the workforce management component.
         WorkforceManagementImpl workforceManager =
                 new WorkforceManagementImpl();
         
 //      Creates the user management component.
         UserManagementImpl userManager = new UserManagementImpl();
-
+        
+//      Handles project change orders.
+        ChangeOrderImpl changeOrderManager = new ChangeOrderImpl();
 
 //      Creates the HTTP server.
         Javalin app =
@@ -68,16 +63,14 @@ public class AndraCorpServer {
                             });
                 });
 
-
-//      Simple route used to test the backend.
+        // Simple route used to test the backend.
         app.get("/api/test", ctx -> {
 
             ctx.result(
                     "AndraCorp backend is running!");
         });
         
-
-//      Creates a new client account.
+        // Creates a new client account.
         app.post("/api/clients", ctx -> {
             Map<String, Object> request = ctx.bodyAsClass(Map.class);
 
@@ -124,6 +117,55 @@ public class AndraCorpServer {
 
             ctx.status(201).json(response);
         });
+        
+        // Client login using their name and phone number.
+        // For local capstone demonstration only.
+        app.post("/api/client/login", ctx -> {
+
+            Map<String, Object> request;
+
+            try {
+                request = ctx.bodyAsClass(Map.class);
+            } catch (Exception e) {
+                ctx.status(400).json(Map.of(
+                        "error", "Invalid request body."
+                ));
+                return;
+            }
+
+            String name = request.get("name") instanceof String
+                    ? (String) request.get("name") : null;
+
+            String phoneNumber = request.get("phoneNumber") instanceof String
+                    ? (String) request.get("phoneNumber") : null;
+
+            if (name == null || name.isBlank()
+                    || phoneNumber == null || phoneNumber.isBlank()) {
+
+                ctx.status(400).json(Map.of(
+                        "error", "Name and phone number are required."
+                ));
+                return;
+            }
+
+            Map<String, String> client =
+                    userManager.findClientByNameAndPhone(
+                            name, phoneNumber
+                    );
+
+            if (client == null) {
+
+                ctx.status(401).json(Map.of(
+                        "error", "Client not found. Check your name and phone number."
+                ));
+                return;
+            }
+
+            ctx.status(200).json(Map.of(
+                    "message", "Client found.",
+                    "client", client
+            ));
+        });
 
         // Retrieves all registered clients.
         app.get("/api/clients", ctx -> {
@@ -132,6 +174,7 @@ public class AndraCorpServer {
 
         // Updates an existing client's information.
         app.put("/api/clients/{id}", ctx -> {
+
             String clientId = ctx.pathParam("id");
             Map<String, Object> request = ctx.bodyAsClass(Map.class);
 
@@ -142,6 +185,7 @@ public class AndraCorpServer {
             if (!(nameValue instanceof String name) || name.isBlank()
                     || !(emailValue instanceof String email) || email.isBlank()
                     || (phoneValue != null && !(phoneValue instanceof String))) {
+
                 ctx.status(400).json(Map.of(
                         "error", "Valid client name and email are required."
                 ));
@@ -156,27 +200,9 @@ public class AndraCorpServer {
             }
 
             // Makes sure the account belongs to a client.
-            String checkSql = """
-                    SELECT 1 FROM users
-                    WHERE user_id = ? AND UPPER(role) = 'CLIENT';
-                    """;
-
-            try (Connection connection = DatabaseManager.getConnection();
-                 PreparedStatement statement = connection.prepareStatement(checkSql)) {
-
-                statement.setString(1, clientId);
-
-                try (ResultSet result = statement.executeQuery()) {
-                    if (!result.next()) {
-                        ctx.status(404).json(Map.of(
-                                "error", "Client not found."
-                        ));
-                        return;
-                    }
-                }
-            } catch (SQLException e) {
-                ctx.status(500).json(Map.of(
-                        "error", "Could not verify client."
+            if (!userManager.userHasRole(clientId, "CLIENT")) {
+                ctx.status(404).json(Map.of(
+                        "error", "Client not found."
                 ));
                 return;
             }
@@ -200,49 +226,34 @@ public class AndraCorpServer {
                     "message", "Client updated successfully."
             ));
         });
-
+        
         // Removes a client only if they have no project history.
         app.delete("/api/clients/{id}", ctx -> {
+
             String clientId = ctx.pathParam("id");
 
-            String checkSql = """
-                    SELECT
-                        (SELECT COUNT(*) FROM users
-                         WHERE user_id = ? AND UPPER(role) = 'CLIENT') AS client_count,
-                        (SELECT COUNT(*) FROM projects
-                         WHERE client_id = ?) AS project_count,
-                        (SELECT COUNT(*) FROM change_orders
-                         WHERE client_id = ?) AS order_count;
-                    """;
+            if (!userManager.userHasRole(clientId, "CLIENT")) {
+                ctx.status(404).json(Map.of(
+                        "error", "Client not found."
+                ));
+                return;
+            }
 
-            try (Connection connection = DatabaseManager.getConnection();
-                 PreparedStatement statement = connection.prepareStatement(checkSql)) {
+            boolean hasHistory;
 
-                statement.setString(1, clientId);
-                statement.setString(2, clientId);
-                statement.setString(3, clientId);
-
-                try (ResultSet result = statement.executeQuery()) {
-                    result.next();
-
-                    if (result.getInt("client_count") == 0) {
-                        ctx.status(404).json(Map.of(
-                                "error", "Client not found."
-                        ));
-                        return;
-                    }
-
-                    if (result.getInt("project_count") > 0
-                            || result.getInt("order_count") > 0) {
-                        ctx.status(409).json(Map.of(
-                                "error", "Client has project or change order history and cannot be deleted."
-                        ));
-                        return;
-                    }
-                }
-            } catch (SQLException e) {
+            try {
+                hasHistory = userManager.clientHasHistory(clientId);
+            } catch (IllegalStateException e) {
                 ctx.status(500).json(Map.of(
                         "error", "Could not verify client assignments."
+                ));
+                return;
+            }
+
+            if (hasHistory) {
+                ctx.status(409).json(Map.of(
+                        "error",
+                        "Client has project or change order history and cannot be deleted."
                 ));
                 return;
             }
@@ -264,6 +275,7 @@ public class AndraCorpServer {
 
         // Assigns an existing client to a project.
         app.put("/api/projects/{id}/client", ctx -> {
+
             String projectId = ctx.pathParam("id");
             Map<String, Object> request = ctx.bodyAsClass(Map.class);
 
@@ -271,6 +283,7 @@ public class AndraCorpServer {
 
             if (!(clientValue instanceof String clientId)
                     || clientId.isBlank()) {
+
                 ctx.status(400).json(Map.of(
                         "error", "Client ID is required."
                 ));
@@ -278,40 +291,15 @@ public class AndraCorpServer {
             }
 
             // Checks that the selected user is a registered client.
-            String checkClientSql = """
-                    SELECT 1 FROM users
-                    WHERE user_id = ? AND UPPER(role) = 'CLIENT';
-                    """;
-
-            try (Connection connection = DatabaseManager.getConnection();
-                 PreparedStatement statement = connection.prepareStatement(checkClientSql)) {
-
-                statement.setString(1, clientId);
-
-                try (ResultSet result = statement.executeQuery()) {
-                    if (!result.next()) {
-                        ctx.status(404).json(Map.of(
-                                "error", "Client not found."
-                        ));
-                        return;
-                    }
-                }
-            } catch (SQLException e) {
-                ctx.status(500).json(Map.of(
-                        "error", "Could not verify client."
+            if (!userManager.userHasRole(clientId, "CLIENT")) {
+                ctx.status(404).json(Map.of(
+                        "error", "Client not found."
                 ));
                 return;
             }
 
             // Checks that the project exists and is not archived.
-            model.Project existingProject = null;
-
-            for (model.Project project : projectManager.getAllProjects()) {
-                if (projectId.equals(project.getProjectId())) {
-                    existingProject = project;
-                    break;
-                }
-            }
+            model.Project existingProject = projectManager.getProject(projectId);
 
             if (existingProject == null) {
                 ctx.status(404).json(Map.of(
@@ -344,10 +332,23 @@ public class AndraCorpServer {
                     "message", "Client assigned successfully."
             ));
         });
+ 
+        // Retrieves projects assigned to a client.
+        // Local development only until secure authentication is added.
+        app.get("/api/client/projects", ctx -> {
+            String clientId = ctx.queryParam("clientId");
 
+            if (clientId == null || clientId.isBlank()) {
+                ctx.status(400).json(Map.of(
+                        "error", "Client ID is required."
+                ));
+                return;
+            }
 
+            ctx.json(projectManager.getProjectsByClient(clientId));
+        });
 
-//      Creates a new construction project.
+        // Creates a new construction project.
         app.post("/api/projects", ctx -> {
 
             ProjectRequest request =
@@ -433,9 +434,9 @@ public class AndraCorpServer {
             ctx.status(201);
             ctx.json(response);
         });
+          
         
-        
-     // Adds a new expense to a construction project.
+        // Adds a new expense to a construction project.
         app.post("/api/expenses", ctx -> {
 
             Map<String, Object> request =
@@ -469,37 +470,18 @@ public class AndraCorpServer {
                 return;
             }
 
-         // Checks that the project exists in SQLite.
-            String checkProjectSql =
-                    "SELECT 1 FROM projects WHERE project_id = ?";
+            // Checks that the project exists.
+            model.Project existingProject =
+                    projectManager.getProject(projectId);
 
-            try (Connection connection = DatabaseManager.getConnection();
-                 PreparedStatement statement =
-                         connection.prepareStatement(checkProjectSql)) {
-
-                statement.setString(1, projectId);
-
-                try (ResultSet result = statement.executeQuery()) {
-
-                    if (!result.next()) {
-                        ctx.status(404).json(Map.of(
-                                "error", "Project not found."
-                        ));
-                        return;
-                    }
-                }
-
-            } catch (SQLException e) {
-
-                e.printStackTrace();
-
-                ctx.status(500).json(Map.of(
-                        "error", "Could not verify project."
+            if (existingProject == null) {
+                ctx.status(404).json(Map.of(
+                        "error", "Project not found."
                 ));
                 return;
             }
 
-            // Saves the expense in the SQLite database.
+            // Saves the expense using ExpenseBudgetImpl.
             String expenseId = expenseManager.addExpense(
                     projectId,
                     description.trim(),
@@ -523,8 +505,8 @@ public class AndraCorpServer {
                     "amount", amount
             ));
         });
-        
 
+        
         // Adds a material to a construction project.
         app.post("/api/materials", ctx -> {
 
@@ -575,7 +557,6 @@ public class AndraCorpServer {
             ));
         });
 
-
         // Updates the quantity of an existing material.
         app.put("/api/materials/{id}/quantity", ctx -> {
 
@@ -618,7 +599,6 @@ public class AndraCorpServer {
             ));
         });
 
-
         // Adds equipment to a construction project.
         app.post("/api/equipment", ctx -> {
 
@@ -656,7 +636,7 @@ public class AndraCorpServer {
             ));
         });
         
-     // Removes an expense from a project.
+        // Removes an expense from a project.
         app.delete("/api/expenses/{id}", ctx -> {
             String expenseId = ctx.pathParam("id");
 
@@ -675,7 +655,7 @@ public class AndraCorpServer {
             ));
         });
         
-     // Removes a material from a project.
+        // Removes a material from a project.
         app.delete("/api/materials/{id}", ctx -> {
 
             String materialId = ctx.pathParam("id");
@@ -694,7 +674,6 @@ public class AndraCorpServer {
                     "message", "Material removed successfully."
             ));
         });
-
 
         // Removes equipment from a project.
         app.delete("/api/equipment/{id}", ctx -> {
@@ -715,135 +694,43 @@ public class AndraCorpServer {
                     "message", "Equipment removed successfully."
             ));
         });
-
-
+        
         // Retrieves materials and equipment for a project.
         app.get("/api/projects/{id}/inventory", ctx -> {
 
             String projectId = ctx.pathParam("id");
 
-            List<Map<String, Object>> materials = new ArrayList<>();
-            List<Map<String, Object>> equipment = new ArrayList<>();
-
-            String materialsSql = """
-                    SELECT material_id, material_name, quantity
-                    FROM materials
-                    WHERE project_id = ?
-                    ORDER BY rowid DESC;
-                    """;
-
-            String equipmentSql = """
-                    SELECT equipment_id, equipment_name
-                    FROM equipment
-                    WHERE project_id = ?
-                    ORDER BY rowid DESC;
-                    """;
-
-            try (Connection connection = DatabaseManager.getConnection()) {
-
-                try (PreparedStatement statement =
-                             connection.prepareStatement(materialsSql)) {
-
-                    statement.setString(1, projectId);
-
-                    try (ResultSet results = statement.executeQuery()) {
-
-                        while (results.next()) {
-                            materials.add(Map.of(
-                                    "materialId", results.getString("material_id"),
-                                    "materialName", results.getString("material_name"),
-                                    "quantity", results.getDouble("quantity")
-                            ));
-                        }
-                    }
-                }
-
-                try (PreparedStatement statement =
-                             connection.prepareStatement(equipmentSql)) {
-
-                    statement.setString(1, projectId);
-
-                    try (ResultSet results = statement.executeQuery()) {
-
-                        while (results.next()) {
-                            equipment.add(Map.of(
-                                    "equipmentId", results.getString("equipment_id"),
-                                    "equipmentName", results.getString("equipment_name")
-                            ));
-                        }
-                    }
-                }
-
-                ctx.json(Map.of(
-                        "projectId", projectId,
-                        "materials", materials,
-                        "equipment", equipment
+            if (projectId == null || projectId.isBlank()) {
+                ctx.status(400).json(Map.of(
+                        "error", "Project ID is required."
                 ));
-
-            } catch (SQLException e) {
-                e.printStackTrace();
-
-                ctx.status(500).json(Map.of(
-                        "error", "Could not retrieve project inventory."
-                ));
+                return;
             }
-        });
 
-        
-     // Retrieves all expenses for a specific project.
+            Map<String, Object> response = new HashMap<>();
+
+            response.put("projectId", projectId);
+            response.putAll(
+                    materialManager.getProjectMaterialsAndEquipment(projectId)
+            );
+
+            ctx.json(response);
+        });
+     
+        // Retrieves all expenses recorded for a specific project.
         app.get("/api/projects/{id}/expenses", ctx -> {
 
             String projectId = ctx.pathParam("id");
 
-            List<Map<String, Object>> expenses = new ArrayList<>();
-
-            String sql = """
-                    SELECT expense_id, project_id, description, amount
-                    FROM expenses
-                    WHERE project_id = ?
-                    ORDER BY rowid DESC;
-                    """;
-
-            try (Connection connection = DatabaseManager.getConnection();
-                 PreparedStatement statement =
-                         connection.prepareStatement(sql)) {
-
-                statement.setString(1, projectId);
-
-                try (ResultSet result = statement.executeQuery()) {
-
-                    while (result.next()) {
-
-                        Map<String, Object> expense = new HashMap<>();
-
-                        expense.put("expenseId",
-                                result.getString("expense_id"));
-
-                        expense.put("projectId",
-                                result.getString("project_id"));
-
-                        expense.put("description",
-                                result.getString("description"));
-
-                        expense.put("amount",
-                                result.getDouble("amount"));
-
-                        expenses.add(expense);
-                    }
-                }
-
-                ctx.json(expenses);
-
-            } catch (SQLException e) {
-
-                e.printStackTrace();
-
-                ctx.status(500).json(Map.of(
-                        "error", "Could not retrieve expenses."
+            if (projectId == null || projectId.isBlank()) {
+                ctx.status(400).json(Map.of(
+                        "error", "Project ID is required."
                 ));
+                return;
             }
-        });
 
+            ctx.json(expenseManager.getProjectExpenseRecords(projectId));
+        });
 
         // Retrieves the total amount spent on a project.
         app.get("/api/projects/{id}/expenses/total", ctx -> {
@@ -859,7 +746,6 @@ public class AndraCorpServer {
             ));
         });
 
-
         // Retrieves the remaining project budget.
         app.get("/api/projects/{id}/budget/remaining", ctx -> {
 
@@ -874,8 +760,7 @@ public class AndraCorpServer {
             ));
         });
         
-
-//      Updates an existing project's information.
+        // Updates an existing project's information.
         app.put("/api/projects/{id}", ctx -> {
             String projectId = ctx.pathParam("id");
             Map<String, Object> request = ctx.bodyAsClass(Map.class);
@@ -908,13 +793,7 @@ public class AndraCorpServer {
             }
 
             // Retrieves the existing project without changing its assignments.
-            model.Project existingProject = null;
-            for (model.Project project : projectManager.getAllProjects()) {
-                if (projectId.equals(project.getProjectId())) {
-                    existingProject = project;
-                    break;
-                }
-            }
+            model.Project existingProject = projectManager.getProject(projectId);
 
             if (existingProject == null) {
                 ctx.status(404).json(Map.of(
@@ -953,9 +832,7 @@ public class AndraCorpServer {
             ));
         });
 
-        
-
-//      Archives a project without deleting its information.
+        // Archives a project without deleting its information.
         app.delete("/api/projects/{id}", ctx -> {
             String projectId = ctx.pathParam("id");
 
@@ -982,18 +859,15 @@ public class AndraCorpServer {
             ));
         });
 
-
-
-//      Returns all projects currently
-//      stored in the SQLite database.
+        // Returns all projects currently
+        // stored in the SQLite database.
         app.get("/api/projects", ctx -> {
 
             ctx.json(
                     projectManager.getAllProjects());
         });
-        
 
-//      Updates the status of an existing project.
+        // Updates the status of an existing project.
         app.put("/api/projects/{id}/status", ctx -> {
             String projectId = ctx.pathParam("id");
             Map<String, Object> request = ctx.bodyAsClass(Map.class);
@@ -1028,40 +902,39 @@ public class AndraCorpServer {
                     "message", "Project status updated successfully."
             ));
         });
-        
-        
 
-//      Retrieves detailed information about a specific project.
+        // Retrieves detailed information about a specific project.
         app.get("/api/projects/{id}", ctx -> {
             String projectId = ctx.pathParam("id");
+
             if (projectId == null || projectId.isBlank()) {
                 ctx.status(400).json(Map.of(
                         "error", "Project ID is required."
                 ));
                 return;
             }
-            for (model.Project project : projectManager.getAllProjects()) {
-                if (projectId.equals(project.getProjectId())) {
-                    ctx.json(project);
-                    return;
-                }
+
+            model.Project project = projectManager.getProject(projectId);
+
+            if (project == null) {
+                ctx.status(404).json(Map.of(
+                        "error", "Project not found."
+                ));
+                return;
             }
-            ctx.status(404).json(Map.of(
-                    "error", "Project not found."
-            ));
+
+            ctx.json(project);
         });
 
-
-
-//      Returns all workers currently
-//      stored in the SQLite database.
+        // Returns all workers currently
+        // stored in the SQLite database.
         app.get("/api/workers", ctx -> {
 
             ctx.json(
                     workforceManager.getAllWorkers());
         });
         
-//      Deactivates a worker without deleting their work history.
+        // Deactivates a worker without deleting their work history.
         app.delete("/api/workers/{id}", ctx -> {
 
             String workerId = ctx.pathParam("id");
@@ -1090,13 +963,12 @@ public class AndraCorpServer {
             );
         });
         
-//      Retrieves all inactive workers.
+        // Retrieves all inactive workers.
         app.get("/api/workers/inactive", ctx -> {
 
             ctx.json(workforceManager.getInactiveWorkers());
 
         });
-
 
         // Reactivates a previously deactivated worker.
         app.put("/api/workers/{id}/reactivate", ctx -> {
@@ -1131,8 +1003,7 @@ public class AndraCorpServer {
 
         });
 
-
-//      Adds a new worker to a project.
+        // Adds a new worker to a project.
         app.post("/api/workers", ctx -> {
 
             WorkerRequest request =
@@ -1217,7 +1088,7 @@ public class AndraCorpServer {
             ctx.json(response);
         });
         
-     // Assigns or reassigns a worker to an area and task.
+        // Assigns or reassigns a worker to an area and task.
         app.put("/api/workers/{id}/assignment", ctx -> {
 
             String workerId = ctx.pathParam("id");
@@ -1262,7 +1133,7 @@ public class AndraCorpServer {
             ));
         });
         
-     // Records the hours a worker spent on an assigned task.
+        // Records the hours a worker spent on an assigned task.
         app.post("/api/workers/{id}/hours", ctx -> {
 
             String workerId = ctx.pathParam("id");
@@ -1337,55 +1208,53 @@ public class AndraCorpServer {
 
         });
         
-     // Retrieves all recorded work hours for a worker.
+        // Retrieves all recorded work hours for a worker.
         app.get("/api/workers/{id}/hours", ctx -> {
 
             String workerId = ctx.pathParam("id");
 
-            List<Map<String, Object>> workHours = new ArrayList<>();
-
-            String sql =
-                "SELECT id, worker_id, task_id, hours, work_date " +
-                "FROM work_hours " +
-                "WHERE worker_id = ? " +
-                "ORDER BY work_date DESC, id DESC";
-
-            try (Connection connection = DatabaseManager.getConnection();
-                 PreparedStatement statement = connection.prepareStatement(sql)) {
-
-                statement.setString(1, workerId);
-
-                try (ResultSet results = statement.executeQuery()) {
-
-                    while (results.next()) {
-
-                        Map<String, Object> record = new HashMap<>();
-
-                        record.put("id", results.getInt("id"));
-                        record.put("workerId", results.getString("worker_id"));
-                        record.put("taskId", results.getString("task_id"));
-                        record.put("hours", results.getDouble("hours"));
-                        record.put("workDate", results.getString("work_date"));
-
-                        workHours.add(record);
-                    }
-                }
-
-                ctx.json(workHours);
-
-            } catch (SQLException exception) {
-
-                exception.printStackTrace();
-
-                ctx.status(500).json(
-                    Map.of("error", "Could not retrieve work hours.")
-                );
+            if (workerId == null || workerId.isBlank()) {
+                ctx.status(400).json(Map.of(
+                        "error", "Worker ID is required."
+                ));
+                return;
             }
+
+            ctx.json(workforceManager.getWorkerHours(workerId));
+        });
+    
+        // Retrieves a change order by its ID.
+        // Development-only route until authentication is implemented.
+        app.get("/api/change-orders/{id}", ctx -> {
+
+            String changeOrderId = ctx.pathParam("id");
+
+            ChangeOrder changeOrder =
+                    changeOrderManager.getChangeOrder(changeOrderId);
+
+            if (changeOrder == null) {
+
+                ctx.status(404).json(Map.of(
+                        "error", "Change order not found."
+                ));
+                return;
+            }
+
+            ctx.json(changeOrder);
         });   
-     
+        
+	    // Retrieves all change orders for a project.
+	    // Development-only until project authorization is implemented.
+	    app.get("/api/projects/{id}/change-orders", ctx -> {
+	
+	        String projectId = ctx.pathParam("id");
+	
+	        ctx.json(
+	                changeOrderManager.getProjectChangeOrders(projectId)
+	        );
+	    });    
 
-
-//      Starts the backend on port 7070.
+        // Starts the backend on port 7070.
         app.start(7070);
     }
 }

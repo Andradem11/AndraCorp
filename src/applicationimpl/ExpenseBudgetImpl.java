@@ -7,6 +7,10 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /*
@@ -104,6 +108,63 @@ public class ExpenseBudgetImpl
             return false;
         }
     }
+    
+
+//  Retrieves all expenses recorded for a specific project.
+    @Override
+    public List<Map<String, Object>> getProjectExpenseRecords(
+            String projectId) {
+
+        List<Map<String, Object>> expenses = new ArrayList<>();
+
+        if (projectId == null || projectId.isBlank()) {
+            return expenses;
+        }
+
+        String sql = """
+                SELECT expense_id, project_id, description, amount
+                FROM expenses
+                WHERE project_id = ?
+                ORDER BY rowid DESC;
+                """;
+
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+            statement.setString(1, projectId);
+
+            try (ResultSet result = statement.executeQuery()) {
+
+                while (result.next()) {
+
+                    Map<String, Object> expense = new HashMap<>();
+
+                    expense.put("expenseId",
+                            result.getString("expense_id"));
+
+                    expense.put("projectId",
+                            result.getString("project_id"));
+
+                    expense.put("description",
+                            result.getString("description"));
+
+                    expense.put("amount",
+                            result.getDouble("amount"));
+
+                    expenses.add(expense);
+                }
+            }
+
+        } catch (SQLException e) {
+            System.out.println(
+                    "Could not retrieve expense records: "
+                            + e.getMessage());
+        }
+
+        return expenses;
+    }
+
 
 //  Calculates the total expenses for a project.
     @Override

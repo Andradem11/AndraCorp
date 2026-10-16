@@ -20,12 +20,16 @@ public class DatabaseManager {
     public static Connection getConnection()
             throws SQLException {
 
-        return DriverManager.getConnection(DATABASE_URL);
+        String databaseUrl = System.getProperty(
+                "andracorp.database.url",
+                DATABASE_URL
+        );
+
+        return DriverManager.getConnection(databaseUrl);
     }
 
 //  Creates the database tables if they do not already exist.
     public static void initializeDatabase() {
-
 
 //      Stores contractor and client accounts.
     	String usersTable = """
@@ -37,7 +41,6 @@ public class DatabaseManager {
     	            role TEXT NOT NULL
     	        );
     	        """;
-
 
 //      Stores project information.
         String projectsTable = """
@@ -87,18 +90,24 @@ public class DatabaseManager {
                 );
                 """;
 
-//      Stores project change orders and client requests.
-        String changeOrdersTable = """
-                CREATE TABLE IF NOT EXISTS change_orders (
-                    change_order_id TEXT PRIMARY KEY,
-                    project_id TEXT NOT NULL,
-                    client_id TEXT,
-                    description TEXT,
-                    status TEXT,
-                    estimated_cost_impact REAL,
-                    estimated_schedule_impact INTEGER
-                );
-                """;
+     // Stores change orders requested by clients or contractors.
+	    String changeOrdersTable = """
+	            CREATE TABLE IF NOT EXISTS change_orders (
+	                change_order_id TEXT PRIMARY KEY,
+	                project_id TEXT NOT NULL,
+	                client_id TEXT,
+	                description TEXT,
+	                status TEXT NOT NULL DEFAULT 'PENDING_REVIEW',
+	                estimated_cost_impact REAL DEFAULT 0,
+	                estimated_schedule_impact INTEGER DEFAULT 0,
+	                requested_by TEXT,
+	                proposed_solution TEXT,
+	                client_approved INTEGER NOT NULL DEFAULT 0,
+	                contractor_approved INTEGER NOT NULL DEFAULT 0,
+	                proposal_version INTEGER NOT NULL DEFAULT 1
+	            );
+	            """;
+	    
 //      Stores materials used on projects.
         String materialsTable = """
                 CREATE TABLE IF NOT EXISTS materials (
@@ -179,15 +188,13 @@ public class DatabaseManager {
         try (Connection connection = getConnection();
              Statement statement = connection.createStatement()) {
 
-
 			statement.execute(usersTable);
 			
 			// Adds the phone_number column to existing databases.
 			boolean hasPhoneColumn = false;
 			
 			try (ResultSet result = statement.executeQuery(
-			        "PRAGMA table_info(users)")) {
-			
+			        "PRAGMA table_info(users)")) {			
 			    while (result.next()) {
 			        if ("phone_number".equalsIgnoreCase(
 			                result.getString("name"))) {
@@ -196,7 +203,6 @@ public class DatabaseManager {
 			        }
 			    }
 			}
-			
 			if (!hasPhoneColumn) {
 			    statement.executeUpdate(
 			            "ALTER TABLE users " +
@@ -205,26 +211,20 @@ public class DatabaseManager {
 			}
 			
 			statement.execute(projectsTable);
-
-        	
         	statement.execute(workersTable);
 
         	// Adds the is_active column to existing databases.
         	boolean hasActiveColumn = false;
-
         	try (ResultSet result = statement.executeQuery(
         	        "PRAGMA table_info(workers)")) {
-
         	    while (result.next()) {
         	        if ("is_active".equalsIgnoreCase(
         	                result.getString("name"))) {
-
         	            hasActiveColumn = true;
         	            break;
         	        }
         	    }
         	}
-
         	if (!hasActiveColumn) {
         	    statement.executeUpdate(
         	        "ALTER TABLE workers " +
@@ -233,35 +233,54 @@ public class DatabaseManager {
         	}
 
         	statement.execute(workHoursTable);
-        	
         	// Adds the work_date column to existing databases.
         	boolean hasWorkDateColumn = false;
-
         	try (ResultSet result = statement.executeQuery(
         	        "PRAGMA table_info(work_hours)")) {
-
         	    while (result.next()) {
-
         	        if ("work_date".equalsIgnoreCase(
         	                result.getString("name"))) {
-
         	            hasWorkDateColumn = true;
         	            break;
         	        }
         	    }
         	}
-
         	if (!hasWorkDateColumn) {
-
         	    statement.executeUpdate(
         	            "ALTER TABLE work_hours " +
         	            "ADD COLUMN work_date TEXT"
         	    );
         	}
-        	
-        	
+     
         	statement.execute(expensesTable);
         	statement.execute(changeOrdersTable);
+        	// Adds new change order columns to existing databases.
+        	String[][] changeOrderColumns = {
+        	    {"requested_by", "TEXT"},
+        	    {"proposed_solution", "TEXT"},
+        	    {"client_approved", "INTEGER NOT NULL DEFAULT 0"},
+        	    {"contractor_approved", "INTEGER NOT NULL DEFAULT 0"},
+        	    {"proposal_version", "INTEGER NOT NULL DEFAULT 1"}
+        	};
+        	for (String[] column : changeOrderColumns) {
+        	    boolean columnExists = false;
+        	    try (ResultSet result = statement.executeQuery(
+        	            "PRAGMA table_info(change_orders)")) {
+        	        while (result.next()) {
+        	            if (column[0].equalsIgnoreCase(
+        	                    result.getString("name"))) {
+        	                columnExists = true;
+        	                break;
+        	            }
+        	        }
+        	    }
+        	    if (!columnExists) {
+        	        statement.executeUpdate(
+        	                "ALTER TABLE change_orders ADD COLUMN "
+        	                        + column[0] + " " + column[1]
+        	        );
+        	    }
+        	}
 
         	statement.execute(materialsTable);
         	statement.execute(equipmentTable);
@@ -273,9 +292,7 @@ public class DatabaseManager {
 
             System.out.println(
                     "AndraCorp database initialized successfully.");
-
         } catch (SQLException e) {
-
             System.out.println(
                     "Database initialization failed: "
                             + e.getMessage());

@@ -109,6 +109,7 @@ public class UserManagementImpl implements UserManagementAPI {
 //  Retrieves all registered clients from SQLite.
     @Override
     public List<Map<String, String>> getAllClients() {
+    	
 
         List<Map<String, String>> clients = new ArrayList<>();
 
@@ -141,6 +142,78 @@ public class UserManagementImpl implements UserManagementAPI {
         }
 
         return clients;
+    }
+    
+
+    // Finds an existing client using their name and phone number.
+    @Override
+    public Map<String, String> findClientByNameAndPhone(
+            String name,
+            String phoneNumber) {
+
+        if (name == null || name.isBlank()
+                || phoneNumber == null || phoneNumber.isBlank()) {
+            return null;
+        }
+
+        // Ignore spaces, parentheses, and dashes in phone numbers.
+        String enteredPhone = phoneNumber.replaceAll("[^0-9]", "");
+
+        if (enteredPhone.isBlank()) {
+            return null;
+        }
+
+        String sql = """
+                SELECT user_id, name, phone_number
+                FROM users
+                WHERE UPPER(role) = 'CLIENT'
+                  AND LOWER(TRIM(name)) = LOWER(?);
+                """;
+
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            statement.setString(1, name.trim());
+
+            try (ResultSet result = statement.executeQuery()) {
+
+                Map<String, String> matchedClient = null;
+
+                while (result.next()) {
+
+                    String storedPhone = result.getString("phone_number");
+
+                    if (storedPhone == null) {
+                        continue;
+                    }
+
+                    String normalizedPhone =
+                            storedPhone.replaceAll("[^0-9]", "");
+
+                    if (!enteredPhone.equals(normalizedPhone)) {
+                        continue;
+                    }
+
+                    // Reject ambiguous matches rather than choosing
+                    // the wrong client account.
+                    if (matchedClient != null) {
+                        return null;
+                    }
+
+                    matchedClient = Map.of(
+                            "clientId", result.getString("user_id"),
+                            "name", result.getString("name")
+                    );
+                }
+
+                return matchedClient;
+            }
+
+        } catch (SQLException e) {
+            System.out.println(
+                    "Could not find client: " + e.getMessage());
+            return null;
+        }
     }
 
 //  Updates basic user information.
@@ -208,4 +281,80 @@ public class UserManagementImpl implements UserManagementAPI {
             return false;
         }
     }
+    
+
+//  Checks whether a user exists with the specified role.
+    @Override
+    public boolean userHasRole(String userId, String role) {
+
+        if (userId == null || userId.isBlank()
+                || role == null || role.isBlank()) {
+            return false;
+        }
+
+        String sql = """
+                SELECT 1
+                FROM users
+                WHERE user_id = ?
+                AND UPPER(role) = UPPER(?);
+                """;
+
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+            statement.setString(1, userId);
+            statement.setString(2, role.trim());
+
+            try (ResultSet result = statement.executeQuery()) {
+                return result.next();
+            }
+
+        } catch (SQLException e) {
+            System.out.println(
+                    "Could not verify user role: " + e.getMessage());
+            return false;
+        }
+    }
+    
+
+    // Checks whether a client has project or change order history.
+    @Override
+    public boolean clientHasHistory(String clientId) {
+
+        if (clientId == null || clientId.isBlank()) {
+            return false;
+        }
+
+        String sql = """
+                SELECT
+                    (SELECT COUNT(*) FROM projects
+                     WHERE client_id = ?) AS project_count,
+                    (SELECT COUNT(*) FROM change_orders
+                     WHERE client_id = ?) AS order_count;
+                """;
+
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+            statement.setString(1, clientId);
+            statement.setString(2, clientId);
+
+            try (ResultSet result = statement.executeQuery()) {
+
+                if (result.next()) {
+                    return result.getInt("project_count") > 0
+                            || result.getInt("order_count") > 0;
+                }
+            }
+
+        } catch (SQLException e) {
+            throw new IllegalStateException(
+                    "Could not verify client history.", e);
+        }
+
+        return false;
+    }
+
 }

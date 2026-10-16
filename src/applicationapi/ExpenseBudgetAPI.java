@@ -1,4 +1,8 @@
 package applicationapi;
+
+import java.util.List;
+import java.util.Map;
+
 //Handles project expenses and budget information.
 public interface ExpenseBudgetAPI {
 //	Adds an expense to a project.
@@ -20,4 +24,7 @@ public interface ExpenseBudgetAPI {
 	
 //	Returns the amount remaining.
 	double getRemainingBudget(String projectId);
+	
+//  Retrieves all expenses recorded for a specific project.
+	List<Map<String, Object>> getProjectExpenseRecords(String projectId);
 }

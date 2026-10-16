@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import "./App.css";
+import ClientPortal from "./ClientPortal";
 import {
   LayoutDashboard,
   FolderKanban,
@@ -19,7 +20,7 @@ import {
   Mail, Phone, Pencil, Trash2, UserRound, BriefcaseBusiness, Link2, UserRoundPlus, Eye,
   Clock3, UserCheck, UserX, RotateCcw, ClipboardList,
 } from "lucide-react";
-function App() {
+function ContractorApp() {
 
   /*
    * Projects are loaded from the Java backend.
@@ -2166,4 +2167,20 @@ function App() {
     </div>
   );
 }
+
+function App() {
+  const [view, setView] = useState("welcome");
+
+  if (view === "contractor") {
+    return <ContractorApp />;
+  }
+
+  return (
+    <ClientPortal
+      onContractor={() => setView("contractor")}
+    />
+  );
+}
+
 export default App;
+

@@ -9,7 +9,9 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /*
@@ -19,7 +21,6 @@ import java.util.UUID;
  */
 public class WorkforceManagementImpl
         implements WorkforceManagementAPI {
-
 
 //  Adds a worker to a project.
     @Override
@@ -88,7 +89,6 @@ public class WorkforceManagementImpl
         }
     }
 
-
 //  Assigns a worker to an area and task.
     @Override
     public boolean assignWorker(
@@ -140,7 +140,6 @@ public class WorkforceManagementImpl
         }
     }
 
-
 //  Moves a worker to another area or task.
     @Override
     public boolean reassignWorker(
@@ -185,8 +184,6 @@ public class WorkforceManagementImpl
             return false;
         }
     }
-
-
     
  // Records the hours worked on a task, including the work date.
     @Override
@@ -264,7 +261,54 @@ public class WorkforceManagementImpl
         }
     }
 
+    
+//  Retrieves all recorded work hours for a worker.
+    @Override
+    public List<Map<String, Object>> getWorkerHours(String workerId) {
 
+        List<Map<String, Object>> workHours = new ArrayList<>();
+
+        if (workerId == null || workerId.isBlank()) {
+            return workHours;
+        }
+
+        String sql = """
+                SELECT id, worker_id, task_id, hours, work_date
+                FROM work_hours
+                WHERE worker_id = ?
+                ORDER BY work_date DESC, id DESC;
+                """;
+
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+            statement.setString(1, workerId);
+
+            try (ResultSet results = statement.executeQuery()) {
+
+                while (results.next()) {
+
+                    Map<String, Object> record = new HashMap<>();
+
+                    record.put("id", results.getInt("id"));
+                    record.put("workerId", results.getString("worker_id"));
+                    record.put("taskId", results.getString("task_id"));
+                    record.put("hours", results.getDouble("hours"));
+                    record.put("workDate", results.getString("work_date"));
+
+                    workHours.add(record);
+                }
+            }
+
+        } catch (SQLException e) {
+            System.out.println(
+                    "Could not retrieve work hours: " + e.getMessage());
+        }
+
+        return workHours;
+    }
+    
 //  Retrieves workers assigned to a project.
     @Override
     public String getProjectWorkforce(
@@ -330,7 +374,6 @@ public class WorkforceManagementImpl
             return "";
         }
     }
-
 
     /*
      * Retrieves all workers currently
@@ -402,7 +445,6 @@ public class WorkforceManagementImpl
 
         return workers;
     }
-
 
 //  Checks whether a worker exists in the database.
     private boolean workerExists(
@@ -503,7 +545,6 @@ public class WorkforceManagementImpl
             return false;
         }
     }
-
 
 //  Retrieves all inactive workers from SQLite.
     @Override

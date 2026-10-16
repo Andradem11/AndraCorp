@@ -277,10 +277,15 @@ public class ProjectManagementImpl
             return false;
         }
     }
+    
 
-//  Retrieves basic project information.
+//  Retrieves a specific project from SQLite.
     @Override
-    public String getProject(String projectId) {
+    public Project getProject(String projectId) {
+
+        if (projectId == null || projectId.isBlank()) {
+            return null;
+        }
 
         String sql = """
                 SELECT *
@@ -288,122 +293,113 @@ public class ProjectManagementImpl
                 WHERE project_id = ?;
                 """;
 
-        try (Connection connection =
-                     DatabaseManager.getConnection();
-
+        try (Connection connection = DatabaseManager.getConnection();
              PreparedStatement statement =
                      connection.prepareStatement(sql)) {
 
-            statement.setString(
-                    1,
-                    projectId);
+            statement.setString(1, projectId);
 
-            try (ResultSet result =
-                         statement.executeQuery()) {
+            try (ResultSet result = statement.executeQuery()) {
 
-                if (!result.next()) {
-                    return null;
+                if (result.next()) {
+                    return mapProject(result);
                 }
-
-                return "Project: "
-                        + result.getString(
-                                "project_name")
-                        + "\nStatus: "
-                        + result.getString(
-                                "status")
-                        + "\nProgress: "
-                        + result.getDouble(
-                                "progress")
-                        + "\nBudget: "
-                        + result.getDouble(
-                                "budget");
             }
 
         } catch (SQLException e) {
-
             System.out.println(
-                    "Could not retrieve project: "
-                            + e.getMessage());
-
-            return null;
+                    "Could not retrieve project: " + e.getMessage());
         }
+
+        return null;
+    }
+    
+
+    // Retrieves all projects assigned to a specific client.
+    @Override
+    public List<Project> getProjectsByClient(String clientId) {
+
+        List<Project> projects = new ArrayList<>();
+
+        if (clientId == null || clientId.isBlank()) {
+            return projects;
+        }
+
+        String sql = """
+                SELECT *
+                FROM projects
+                WHERE client_id = ?
+                ORDER BY project_name;
+                """;
+
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+            statement.setString(1, clientId);
+
+            try (ResultSet result = statement.executeQuery()) {
+
+                while (result.next()) {
+                    projects.add(mapProject(result));
+                }
+            }
+
+        } catch (SQLException e) {
+            System.out.println(
+                    "Could not retrieve client projects: " + e.getMessage());
+        }
+
+        return projects;
     }
 
-
-//  Retrieves all projects currently
-//  stored in the SQLite database.
+//  Retrieves all projects stored in SQLite.
     @Override
     public List<Project> getAllProjects() {
 
-        List<Project> projects =
-                new ArrayList<>();
+        List<Project> projects = new ArrayList<>();
 
         String sql = """
                 SELECT *
                 FROM projects;
                 """;
 
-        try (Connection connection =
-                     DatabaseManager.getConnection();
-
+        try (Connection connection = DatabaseManager.getConnection();
              PreparedStatement statement =
                      connection.prepareStatement(sql);
+             ResultSet result = statement.executeQuery()) {
 
-             ResultSet result =
-                     statement.executeQuery()) {
-
-
-//          Goes through every project
-//          returned from the database.
             while (result.next()) {
-
-                Project project =
-                        new Project(
-                                result.getString(
-                                        "project_id"),
-
-                                result.getString(
-                                        "contractor_id"),
-
-                                result.getString(
-                                        "project_name"));
-
-
-//              Loads the rest of the project
-//              information from SQLite.
-                project.setClientId(
-                        result.getString(
-                                "client_id"));
-
-                project.setStatus(
-                        result.getString(
-                                "status"));
-
-                project.setProgress(
-                        result.getDouble(
-                                "progress"));
-
-                project.setEstimatedCompletionDate(
-                        result.getString(
-                                "estimated_completion_date"));
-
-                project.setBudget(
-                        result.getDouble(
-                                "budget"));
-
-
-//              Adds the project to the list
-//              that will be returned.
-                projects.add(project);
+                projects.add(mapProject(result));
             }
 
         } catch (SQLException e) {
-
             System.out.println(
-                    "Could not retrieve projects: "
-                            + e.getMessage());
+                    "Could not retrieve projects: " + e.getMessage());
         }
 
         return projects;
     }
+
+
+//  Converts a SQLite result into a Project object.
+    private Project mapProject(ResultSet result) throws SQLException {
+
+        Project project = new Project(
+                result.getString("project_id"),
+                result.getString("contractor_id"),
+                result.getString("project_name")
+        );
+
+        project.setClientId(result.getString("client_id"));
+        project.setStatus(result.getString("status"));
+        project.setProgress(result.getDouble("progress"));
+        project.setEstimatedCompletionDate(
+                result.getString("estimated_completion_date")
+        );
+        project.setBudget(result.getDouble("budget"));
+
+        return project;
+    }
+
 }

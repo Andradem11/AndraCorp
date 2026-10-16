@@ -1,0 +1,155 @@
+
+.client-portal {
+  min-height: 100vh;
+  background: #081525;
+  color: #e8edf5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  font-family: "Manrope", sans-serif;
+}
+
+.client-login-card {
+  width: 100%;
+  max-width: 480px;
+  background: #12243a;
+  border: 1px solid #243b53;
+  border-radius: 18px;
+  padding: 36px;
+}
+
+.client-brand {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.client-brand img {
+  width: 76px;
+  height: 76px;
+  object-fit: contain;
+}
+
+.client-brand h1 {
+  margin: 12px 0 4px;
+  color: #f59e0b;
+}
+
+.client-login-card h2 {
+  margin-bottom: 10px;
+}
+
+.client-login-card p {
+  color: #9cacc0;
+}
+
+.client-role-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 26px;
+}
+
+.client-role-options button {
+  background: #1b314a;
+  border: 1px solid #304b67;
+  color: #e8edf5;
+  border-radius: 12px;
+  padding: 22px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.client-role-options button:hover {
+  border-color: #f59e0b;
+}
+
+.client-role-options svg {
+  color: #f59e0b;
+}
+
+.client-role-options span {
+  color: #9cacc0;
+  font-size: 12px;
+  text-align: center;
+}
+
+.client-login-card form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.client-login-card label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.client-login-card input {
+  background: #081525;
+  border: 1px solid #304b67;
+  color: white;
+  padding: 13px;
+  border-radius: 8px;
+  font-size: 15px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.client-login-card input:focus {
+  outline: 2px solid #f59e0b;
+}
+
+.client-submit {
+  background: #f59e0b;
+  color: #081525;
+  border: none;
+  padding: 14px;
+  border-radius: 9px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 16px;
+  width: 100%;
+}
+
+.client-submit:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.client-back {
+  background: none;
+  border: none;
+  color: #9cacc0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  margin-bottom: 24px;
+}
+
+.client-login-error {
+  color: #ff8a8a !important;
+  font-size: 13px;
+}
+
+.client-welcome-message {
+  background: #1b314a;
+  border-radius: 10px;
+  padding: 20px;
+  margin-top: 24px;
+}
+
+@media (max-width: 480px) {
+  .client-role-options {
+    grid-template-columns: 1fr;
+  }
+
+  .client-login-card {
+    padding: 24px;
+  }
+}

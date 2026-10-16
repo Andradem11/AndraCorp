@@ -21,6 +21,11 @@ public interface UserManagementAPI {
 
     // Retrieves all registered clients.
     List<Map<String, String>> getAllClients();
+    
+    // Finds a client using their full name and phone number.
+    Map<String, String> findClientByNameAndPhone(
+            String name,
+            String phoneNumber);
 
     // Updates basic user information.
     boolean updateUser(
@@ -31,4 +36,10 @@ public interface UserManagementAPI {
 
     // Removes a user from the system.
     boolean deleteUser(String userId);
+    
+    // Checks whether a user exists with the specified role.
+    boolean userHasRole(String userId, String role);
+    
+    // Checks whether a client has project or change order history.
+    boolean clientHasHistory(String clientId);
 }

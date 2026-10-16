@@ -1,4 +1,8 @@
 package applicationapi;
+
+import java.util.List;
+import java.util.Map;
+
 /*
  * Handles materials and equipment being used
  * on construction projects.
@@ -26,6 +30,7 @@ public interface MaterialEquipmentAPI {
 	 boolean removeEquipment(String equipmentId);
 	 
 //	 Retrieves the materials and equipment
-	 String getProjectMaterialsAndEquipment(
-	            String projectId);
+	// Retrieves materials and equipment assigned to a project.
+	 Map<String, List<Map<String, Object>>> getProjectMaterialsAndEquipment(
+	         String projectId);
 }

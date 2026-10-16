@@ -8,6 +8,10 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /*
@@ -176,31 +180,40 @@ public class MaterialEquipmentImpl
         }
     }
 
+
     // Retrieves materials and equipment assigned to a project.
     @Override
-    public String getProjectMaterialsAndEquipment(String projectId) {
+    public Map<String, List<Map<String, Object>>>
+            getProjectMaterialsAndEquipment(String projectId) {
+
+        List<Map<String, Object>> materials = new ArrayList<>();
+        List<Map<String, Object>> equipment = new ArrayList<>();
+
+        Map<String, List<Map<String, Object>>> inventory =
+                new HashMap<>();
+
+        inventory.put("materials", materials);
+        inventory.put("equipment", equipment);
 
         if (projectId == null || projectId.isBlank()) {
-            return "";
+            return inventory;
         }
 
-        StringBuilder result = new StringBuilder();
-
         String materialsSql = """
-                SELECT material_name, quantity
+                SELECT material_id, material_name, quantity
                 FROM materials
-                WHERE project_id = ?;
+                WHERE project_id = ?
+                ORDER BY rowid DESC;
                 """;
 
         String equipmentSql = """
-                SELECT equipment_name
+                SELECT equipment_id, equipment_name
                 FROM equipment
-                WHERE project_id = ?;
+                WHERE project_id = ?
+                ORDER BY rowid DESC;
                 """;
 
         try (Connection connection = DatabaseManager.getConnection()) {
-
-            result.append("Materials:\n");
 
             try (PreparedStatement statement =
                          connection.prepareStatement(materialsSql)) {
@@ -208,16 +221,22 @@ public class MaterialEquipmentImpl
                 statement.setString(1, projectId);
 
                 try (ResultSet rows = statement.executeQuery()) {
+
                     while (rows.next()) {
-                        result.append(rows.getString("material_name"))
-                              .append(" - Quantity: ")
-                              .append(rows.getDouble("quantity"))
-                              .append("\n");
+
+                        Map<String, Object> material = new HashMap<>();
+
+                        material.put("materialId",
+                                rows.getString("material_id"));
+                        material.put("materialName",
+                                rows.getString("material_name"));
+                        material.put("quantity",
+                                rows.getDouble("quantity"));
+
+                        materials.add(material);
                     }
                 }
             }
-
-            result.append("Equipment:\n");
 
             try (PreparedStatement statement =
                          connection.prepareStatement(equipmentSql)) {
@@ -225,20 +244,29 @@ public class MaterialEquipmentImpl
                 statement.setString(1, projectId);
 
                 try (ResultSet rows = statement.executeQuery()) {
+
                     while (rows.next()) {
-                        result.append(rows.getString("equipment_name"))
-                              .append("\n");
+
+                        Map<String, Object> item = new HashMap<>();
+
+                        item.put("equipmentId",
+                                rows.getString("equipment_id"));
+                        item.put("equipmentName",
+                                rows.getString("equipment_name"));
+
+                        equipment.add(item);
                     }
                 }
             }
 
-            return result.toString();
-
         } catch (SQLException e) {
-            System.out.println("Could not retrieve materials and equipment: "
-                    + e.getMessage());
-            return "";
+            System.out.println(
+                    "Could not retrieve project inventory: "
+                            + e.getMessage());
         }
+
+        return inventory;
     }
+
 }
 
