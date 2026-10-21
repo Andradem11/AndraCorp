@@ -1,155 +1,181 @@
-
+:root {
+  --client-navy: #081525;
+  --client-panel: #12243a;
+  --client-card: #1b314a;
+  --client-border: #304b67;
+  --client-gold: #f59e0b;
+  --client-text: #e8edf5;
+  --client-muted: #9cacc0;
+}
+/* Client Portal Base */
 .client-portal {
   min-height: 100vh;
-  background: #081525;
-  color: #e8edf5;
+  padding: 24px;
+  background: var(--client-navy);
+  color: var(--client-text);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
   font-family: "Manrope", sans-serif;
 }
-
+.client-portal *, .client-portal *::before, .client-portal *::after { box-sizing: border-box; }
 .client-login-card {
   width: 100%;
   max-width: 480px;
-  background: #12243a;
+  padding: 36px;
+  background: var(--client-panel);
   border: 1px solid #243b53;
   border-radius: 18px;
-  padding: 36px;
 }
+.client-login-card h2 { margin-bottom: 10px; }
+.client-login-card p { color: var(--client-muted); }
+.client-brand { text-align: center; margin-bottom: 32px; }
+.client-brand img { width: 76px; height: 76px; object-fit: contain; }
+.client-brand h1 { margin: 12px 0 4px; color: var(--client-gold); }
+.client-back { display: flex; align-items: center; gap: 8px; margin-bottom: 24px; padding: 0; background: none; border: 0; color: var(--client-muted); cursor: pointer; }
+.client-submit { display: block; width: 100%; margin-top: 16px; padding: 14px; background: var(--client-gold); color: var(--client-navy); border: 0; border-radius: 9px; font-weight: 700; cursor: pointer; }
+.client-submit:disabled { opacity: .6; cursor: wait; }
+.client-login-error { color: #ff8a8a !important; font-size: 13px; }
+.client-welcome-message { padding: 20px; margin-top: 24px; background: var(--client-card); border-radius: 10px; }
+/* Legacy Client Project Cards */
+.client-dashboard-card { width: 100%; max-width: 1100px; padding: 40px; }
+.client-projects { margin-top: 30px; }
+.client-projects > h3 { margin-bottom: 22px; font-size: 22px; color: var(--client-text); }
+.client-project-card { margin-bottom: 20px; padding: 26px; background: var(--client-card); border: 1px solid var(--client-border); border-radius: 14px; }
+.client-project-card h3 { margin: 0 0 20px; font-size: 21px; color: var(--client-gold); }
+.client-project-card p { margin: 12px 0; color: var(--client-muted); }
+.client-project-card strong { color: var(--client-text); }
+.client-progress-bar { height: 10px; margin-top: 22px; background: var(--client-navy); border-radius: 20px; overflow: hidden; }
+.client-progress-fill { height: 100%; background: var(--client-gold); border-radius: 20px; transition: width .3s ease; }
+.client-details-button { margin-top: 24px; padding: 12px 20px; background: transparent; border: 1px solid var(--client-gold); border-radius: 8px; color: var(--client-gold); font-size: 14px; font-weight: 700; cursor: pointer; }
+.client-details-button:hover { background: var(--client-gold); color: var(--client-navy); }
+.client-project-details { margin-top: 20px; }
+.client-project-details > h2 { margin-bottom: 8px; font-size: 30px; }
+.client-project-details > p { margin-bottom: 28px; color: var(--client-muted); }
+.client-details-sections { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin-top: 24px; align-items: stretch; }
+.client-details-sections > .client-project-card { min-width: 0; margin: 0; padding: 30px; }
+.client-details-sections > .client-project-card h3 { margin: 0 0 26px; font-size: 24px; }
+.client-details-sections > .client-project-card h4 { margin: 28px 0 16px; font-size: 18px; color: var(--client-text); }
+.client-details-sections > .client-project-card p { margin: 12px 0; line-height: 1.6; }
+.client-worker-item { padding: 16px 0; border-bottom: 1px solid var(--client-border); }
+.client-worker-item:last-child { border-bottom: 0; }
+.client-worker-item strong { color: var(--client-text); font-size: 16px; }
+.client-worker-item p { margin: 6px 0; font-size: 14px; color: var(--client-muted); }
 
-.client-brand {
-  text-align: center;
-  margin-bottom: 32px;
+/* Welcome and client sign-in â€” one background, one glass panel */
+/* Welcome and Sign In */
+.client-portal.client-portal-auth {
+  background: linear-gradient(rgba(5,12,24,.12),rgba(5,12,24,.25)), url("/images/login-background.png") center / cover no-repeat;
 }
-
-.client-brand img {
-  width: 76px;
-  height: 76px;
-  object-fit: contain;
+.client-portal-auth .client-auth-card {
+  width: min(100%, 830px);
+  max-width: 830px;
+  padding: 38px 38px 42px;
+  border: 1px solid rgba(203,215,231,.45);
+  border-radius: 22px;
+  background: linear-gradient(125deg,rgba(13,29,49,.72),rgba(27,37,50,.58) 68%,rgba(10,25,43,.72));
+  box-shadow: 0 26px 85px rgba(0,0,0,.35);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
-
-.client-brand h1 {
-  margin: 12px 0 4px;
-  color: #f59e0b;
+.client-portal-auth .client-auth-brand { margin: 0 auto; text-align: center; }
+.client-portal-auth .client-gold-logo { width: 96px; height: 96px; margin: 0 auto 12px; color: #f0bc63; }
+.client-portal-auth .client-gold-logo svg { width: 100%; height: 100%; }
+.client-portal-auth .client-auth-wordmark { display: flex; justify-content: center; gap: 3px; margin: 0 0 8px; font-size: clamp(29px,4.2vw,44px); font-weight: 650; letter-spacing: .21em; line-height: 1.1; }
+.client-portal-auth .client-auth-wordmark span:first-child { color: #f3f5f9; }
+.client-portal-auth .client-auth-wordmark span:last-child { color: #e9b65f; }
+.client-portal-auth .client-auth-brand p { margin: 0; color: #c9d3df; font-size: 12px; text-transform: uppercase; letter-spacing: .29em; }
+.client-portal-auth .client-auth-divider { width: 120px; height: 1px; margin: 34px auto 33px; background: linear-gradient(90deg,transparent,#edb95b,transparent); }
+.client-portal-auth .client-auth-heading { text-align: center; }
+.client-portal-auth .client-auth-heading h2 { margin: 0 0 9px; color: #f6f7fb; font-size: clamp(29px,4vw,42px); font-weight: 750; }
+.client-portal-auth .client-auth-heading p { margin: 0; color: #c3cedd; font-size: 18px; line-height: 1.5; }
+.client-portal-auth .client-role-options { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 26px; margin-top: 28px; }
+.client-portal-auth .client-role-options button { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; min-height: 244px; padding: 28px 22px; border: 1px solid rgba(179,198,219,.43); border-radius: 17px; background: rgba(21,39,59,.6); color: #f5f7fc; cursor: pointer; transition: transform .2s,border-color .2s,background .2s; }
+.client-portal-auth .client-role-options button:hover { transform: translateY(-3px); background: rgba(29,48,69,.83); border-color: #f1bb58; }
+.client-portal-auth .client-role-options .client-role-contractor { border-color: #f1b84e; }
+.client-portal-auth .client-role-options button > svg { color: #f2ba60; }
+.client-portal-auth .client-role-options .client-role-client > svg { color: #c4dcf1; }
+.client-portal-auth .client-role-options strong { font-size: 25px; line-height: 1.2; }
+.client-portal-auth .client-role-options span:not(.client-role-arrow) { color: #cbd5e2; font-size: 16px; line-height: 1.5; text-align: center; }
+.client-portal-auth .client-role-arrow { position: absolute; right: 18px; bottom: 18px; display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; background: linear-gradient(140deg,#99794b,#5d513e); }
+.client-portal-auth .client-role-client .client-role-arrow { background: rgba(176,195,217,.3); }
+.client-portal-auth .client-role-arrow svg { color: white; }
+.client-portal-auth .client-back { margin: 0 0 28px; gap: 12px; color: #e8edf5; font-size: 17px; }
+.client-portal-auth .client-auth-card:has(.client-input-wrap) { width: min(100%,735px); padding: 34px 58px 44px; }
+.client-portal-auth .client-auth-card:has(.client-input-wrap) .client-auth-divider { margin: 22px auto 26px; }
+.client-portal-auth .client-auth-card:has(.client-input-wrap) .client-auth-heading { text-align: left; }
+.client-portal-auth .client-auth-card:has(.client-input-wrap) .client-auth-heading p { font-size: 17px; }
+.client-portal-auth .client-auth-card form { display: flex; flex-direction: column; gap: 0; max-width: none; margin: 28px 0 0; }
+.client-portal-auth .client-field-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.client-portal-auth .client-input-wrap { display: flex; align-items: center; gap: 18px; height: 65px; margin-bottom: 19px; padding: 0 22px; border: 1px solid #6b7e93; border-radius: 12px; background: rgba(6,18,34,.43); color: #edf2f9; }
+.client-portal-auth .client-input-wrap:focus-within { border-color: #f0bc63; outline: 1px solid #f0bc63; }
+.client-portal-auth .client-input-wrap input { flex: 1; min-width: 0; width: 100%; height: 100%; padding: 0; border: 0; outline: none; box-shadow: none; background: transparent; color: #f4f6fb; font: inherit; font-size: 17px; }
+.client-portal-auth .client-input-wrap input:focus { outline: none; }
+.client-portal-auth .client-input-wrap input::placeholder { color: #aab9cc; opacity: 1; }
+.client-portal-auth .client-submit { position: relative; display: flex; align-items: center; justify-content: center; width: 100%; min-height: 67px; margin: 10px 0 0; border: 1px solid #f4c56e; border-radius: 12px; background: linear-gradient(180deg,#f7c86e,#dba94d); color: #081525; font-size: 19px; font-weight: 750; cursor: pointer; }
+.client-portal-auth .client-submit svg { position: absolute; right: 24px; }
+.client-portal-auth .client-auth-help { display: flex; align-items: center; justify-content: center; gap: 16px; margin: 31px 0 0; color: #cbd5e2; font-size: 14px; white-space: nowrap; }
+.client-portal-auth .client-auth-help::before, .client-portal-auth .client-auth-help::after { content: ""; flex: 1; height: 1px; background: #56687b; }
+/* Responsive Layout */
+@media (max-width: 700px) {
+.client-details-sections { grid-template-columns: 1fr; }
+.client-details-sections > .client-project-card { padding: 22px; }
+.client-portal.client-portal-auth { padding: 18px 12px; }
+.client-portal-auth .client-auth-card, .client-portal-auth .client-auth-card:has(.client-input-wrap) { padding: 28px 22px; }
+.client-portal-auth .client-role-options { gap: 14px; }
+.client-portal-auth .client-role-options button { min-height: 205px; padding: 20px 10px; }
+.client-portal-auth .client-role-options strong { font-size: 20px; }
+.client-portal-auth .client-role-options span:not(.client-role-arrow) { font-size: 13px; }
+.client-portal-auth .client-role-arrow { width: 36px; height: 36px; right: 8px; bottom: 8px; }
+.client-portal-auth .client-auth-brand p { font-size: 9px; letter-spacing: .16em; }
 }
-
-.client-login-card h2 {
-  margin-bottom: 10px;
+@media (max-width: 600px) {
+.client-dashboard-card { padding: 24px; }
+.client-project-card { padding: 20px; }
 }
-
-.client-login-card p {
-  color: #9cacc0;
-}
-
-.client-role-options {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-  margin-top: 26px;
-}
-
-.client-role-options button {
-  background: #1b314a;
-  border: 1px solid #304b67;
-  color: #e8edf5;
-  border-radius: 12px;
-  padding: 22px 12px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  cursor: pointer;
-}
-
-.client-role-options button:hover {
-  border-color: #f59e0b;
-}
-
-.client-role-options svg {
-  color: #f59e0b;
-}
-
-.client-role-options span {
-  color: #9cacc0;
-  font-size: 12px;
-  text-align: center;
-}
-
-.client-login-card form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-top: 24px;
-}
-
-.client-login-card label {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.client-login-card input {
-  background: #081525;
-  border: 1px solid #304b67;
-  color: white;
-  padding: 13px;
-  border-radius: 8px;
-  font-size: 15px;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.client-login-card input:focus {
-  outline: 2px solid #f59e0b;
-}
-
-.client-submit {
-  background: #f59e0b;
-  color: #081525;
-  border: none;
-  padding: 14px;
-  border-radius: 9px;
-  font-weight: 700;
-  cursor: pointer;
-  margin-top: 16px;
-  width: 100%;
-}
-
-.client-submit:disabled {
-  opacity: 0.6;
-  cursor: wait;
-}
-
-.client-back {
-  background: none;
-  border: none;
-  color: #9cacc0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  margin-bottom: 24px;
-}
-
-.client-login-error {
-  color: #ff8a8a !important;
-  font-size: 13px;
-}
-
-.client-welcome-message {
-  background: #1b314a;
-  border-radius: 10px;
-  padding: 20px;
-  margin-top: 24px;
-}
-
 @media (max-width: 480px) {
-  .client-role-options {
-    grid-template-columns: 1fr;
-  }
+.client-portal { padding: 16px; }
+.client-login-card { padding: 24px; }
+.client-portal-auth .client-role-options { grid-template-columns: 1fr; }
+.client-portal-auth .client-role-options button { min-height: 160px; }
+.client-portal-auth .client-auth-wordmark { letter-spacing: .12em; }
+.client-portal-auth .client-auth-help { white-space: normal; text-align: center; }
+}
 
-  .client-login-card {
-    padding: 24px;
-  }
+/* Client Dashboard Layout */
+.client-portal-dashboard > .client-dashboard-host {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.client-portal.client-portal-dashboard {
+  display: block;
+  width: 100%;
+  min-height: 100vh;
+  padding: 0;
+  margin: 0;
+  background: #081525;
+}
+.client-portal-dashboard > .client-dashboard-card {
+  width: 100%;
+  max-width: none;
+  min-height: 100vh;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.client-portal-dashboard .client-dashboard-shell {
+  width: 100%;
+  min-height: 100vh;
+  margin: 0;
+  border-radius: 0;
 }
