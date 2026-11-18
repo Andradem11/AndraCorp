@@ -65,7 +65,8 @@ public class DatabaseManager {
                     trade TEXT,
                     area TEXT,
                     task_id TEXT,
-                    is_active INTEGER NOT NULL DEFAULT 1
+                    is_active INTEGER NOT NULL DEFAULT 1,
+                    hourly_rate REAL
                 );
                 """;
 
@@ -76,7 +77,9 @@ public class DatabaseManager {
                     worker_id TEXT NOT NULL,
                     task_id TEXT NOT NULL,
                     hours REAL NOT NULL,
-                    work_date TEXT
+                    work_date TEXT,
+                    hourly_rate REAL,
+                    labor_cost REAL
                 );
                 """;
 
@@ -104,7 +107,19 @@ public class DatabaseManager {
 	                proposed_solution TEXT,
 	                client_approved INTEGER NOT NULL DEFAULT 0,
 	                contractor_approved INTEGER NOT NULL DEFAULT 0,
-	                proposal_version INTEGER NOT NULL DEFAULT 1
+	                proposal_version INTEGER NOT NULL DEFAULT 1,
+                labor_cost_change REAL NOT NULL DEFAULT 0,
+                material_cost_change REAL NOT NULL DEFAULT 0,
+                equipment_cost_change REAL NOT NULL DEFAULT 0,
+                simulated_cost_impact REAL,
+                final_cost_impact REAL,
+                decline_reason TEXT,
+                change_type TEXT NOT NULL DEFAULT 'GENERAL',
+                workforce_action TEXT,
+                requested_worker_count INTEGER,
+                source_area TEXT,
+                target_area TEXT,
+                material_preference TEXT
 	            );
 	            """;
 	    
@@ -232,7 +247,27 @@ public class DatabaseManager {
         	    );
         	}
 
-        	statement.execute(workHoursTable);
+        	         // Trade rates are contractor-defined client billing estimates.
+         statement.execute("""
+                 CREATE TABLE IF NOT EXISTS trade_rates (
+                     trade TEXT PRIMARY KEY,
+                     hourly_rate REAL NOT NULL CHECK(hourly_rate >= 0)
+                 );
+                 """);
+         boolean hasHourlyRate = false;
+         try (ResultSet result = statement.executeQuery("PRAGMA table_info(workers)")) {
+             while (result.next()) {
+                 if ("hourly_rate".equalsIgnoreCase(result.getString("name"))) {
+                     hasHourlyRate = true;
+                     break;
+                 }
+             }
+         }
+         if (!hasHourlyRate) {
+             statement.executeUpdate("ALTER TABLE workers ADD COLUMN hourly_rate REAL");
+         }
+
+statement.execute(workHoursTable);
         	// Adds the work_date column to existing databases.
         	boolean hasWorkDateColumn = false;
         	try (ResultSet result = statement.executeQuery(
@@ -252,6 +287,22 @@ public class DatabaseManager {
         	    );
         	}
      
+            // Preserve existing hours; new entries snapshot their rate and cost.
+            for (String column : new String[]{"hourly_rate", "labor_cost"}) {
+                boolean exists = false;
+                try (ResultSet columns = statement.executeQuery("PRAGMA table_info(work_hours)")) {
+                    while (columns.next()) {
+                        if (column.equalsIgnoreCase(columns.getString("name"))) {
+                            exists = true;
+                            break;
+                        }
+                    }
+                }
+                if (!exists) {
+                    statement.executeUpdate("ALTER TABLE work_hours ADD COLUMN " + column + " REAL");
+                }
+            }
+
         	statement.execute(expensesTable);
         	statement.execute(changeOrdersTable);
         	// Adds new change order columns to existing databases.
@@ -260,7 +311,19 @@ public class DatabaseManager {
         	    {"proposed_solution", "TEXT"},
         	    {"client_approved", "INTEGER NOT NULL DEFAULT 0"},
         	    {"contractor_approved", "INTEGER NOT NULL DEFAULT 0"},
-        	    {"proposal_version", "INTEGER NOT NULL DEFAULT 1"}
+        	    {"proposal_version", "INTEGER NOT NULL DEFAULT 1"},
+                {"labor_cost_change", "REAL NOT NULL DEFAULT 0"},
+                {"material_cost_change", "REAL NOT NULL DEFAULT 0"},
+                {"equipment_cost_change", "REAL NOT NULL DEFAULT 0"},
+                {"simulated_cost_impact", "REAL"},
+                {"final_cost_impact", "REAL"},
+                {"decline_reason", "TEXT"},
+                {"change_type", "TEXT NOT NULL DEFAULT 'GENERAL'"},
+                {"workforce_action", "TEXT"},
+                {"requested_worker_count", "INTEGER"},
+                {"source_area", "TEXT"},
+                {"target_area", "TEXT"},
+                {"material_preference", "TEXT"}
         	};
         	for (String[] column : changeOrderColumns) {
         	    boolean columnExists = false;
@@ -282,7 +345,22 @@ public class DatabaseManager {
         	    }
         	}
 
-        	statement.execute(materialsTable);
+        	        // Stores each negotiation action without overwriting earlier responses.
+        statement.execute("""
+                CREATE TABLE IF NOT EXISTS change_order_history (
+                    history_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    change_order_id TEXT NOT NULL,
+                    proposal_version INTEGER NOT NULL,
+                    actor_role TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    message TEXT,
+                    cost_impact REAL,
+                    schedule_impact INTEGER,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+                """);
+
+statement.execute(materialsTable);
         	statement.execute(equipmentTable);
         	statement.execute(scheduleTasksTable);
         	statement.execute(dailyReportsTable);

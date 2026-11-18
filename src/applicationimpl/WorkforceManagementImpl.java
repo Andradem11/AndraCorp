@@ -39,9 +39,10 @@ public class WorkforceManagementImpl
                     worker_name,
                     trade,
                     area,
-                    task_id
+                    task_id,
+                    hourly_rate
                 )
-                VALUES (?, ?, ?, ?, ?, ?);
+                VALUES (?, ?, ?, ?, ?, ?, (SELECT hourly_rate FROM trade_rates WHERE trade = ?));
                 """;
 
         try (Connection connection =
@@ -75,6 +76,7 @@ public class WorkforceManagementImpl
                     6,
                     null);
 
+            statement.setString(7, trade);
             statement.executeUpdate();
 
             return workerId;
@@ -217,46 +219,30 @@ public class WorkforceManagementImpl
             return false;
         }
 
+        // Use the worker's saved rate, not the trade's current default.
+        // Do not save unpriced hours as if they cost $0.
         String sql = """
                 INSERT INTO work_hours (
-                    worker_id,
-                    task_id,
-                    hours,
-                    work_date
+                    worker_id, task_id, hours, work_date, hourly_rate, labor_cost
                 )
-                VALUES (?, ?, ?, ?);
+                SELECT worker_id, ?, ?, ?, hourly_rate, ROUND(? * hourly_rate, 2)
+                FROM workers
+                WHERE worker_id = ? AND hourly_rate IS NOT NULL AND hourly_rate >= 0;
                 """;
 
-        try (Connection connection =
-                     DatabaseManager.getConnection();
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
 
-             PreparedStatement statement =
-                     connection.prepareStatement(sql)) {
-
-            statement.setString(
-                    1,
-                    workerId);
-
-            statement.setString(
-                    2,
-                    taskId);
-
-            statement.setDouble(
-                    3,
-                    hours);
-
-            statement.setString(
-                    4,
-                    workDate);
+            statement.setString(1, taskId);
+            statement.setDouble(2, hours);
+            statement.setString(3, workDate);
+            statement.setDouble(4, hours);
+            statement.setString(5, workerId);
 
             return statement.executeUpdate() > 0;
 
         } catch (SQLException e) {
-
-            System.out.println(
-                    "Could not record work hours: "
-                            + e.getMessage());
-
+            System.out.println("Could not record work hours: " + e.getMessage());
             return false;
         }
     }
@@ -273,7 +259,7 @@ public class WorkforceManagementImpl
         }
 
         String sql = """
-                SELECT id, worker_id, task_id, hours, work_date
+                SELECT id, worker_id, task_id, hours, work_date, hourly_rate, labor_cost
                 FROM work_hours
                 WHERE worker_id = ?
                 ORDER BY work_date DESC, id DESC;
@@ -296,6 +282,8 @@ public class WorkforceManagementImpl
                     record.put("taskId", results.getString("task_id"));
                     record.put("hours", results.getDouble("hours"));
                     record.put("workDate", results.getString("work_date"));
+                    record.put("hourlyRate", results.getObject("hourly_rate"));
+                    record.put("laborCost", results.getObject("labor_cost"));
 
                     workHours.add(record);
                 }
@@ -429,6 +417,8 @@ public class WorkforceManagementImpl
                 worker.setTaskId(
                         result.getString(
                                 "task_id"));
+                worker.setHourlyRate(result.getObject("hourly_rate") == null
+                        ? null : result.getDouble("hourly_rate"));
 
 
 //              Adds the worker to the list
@@ -573,6 +563,8 @@ public class WorkforceManagementImpl
 
                 worker.setArea(result.getString("area"));
                 worker.setTaskId(result.getString("task_id"));
+                worker.setHourlyRate(result.getObject("hourly_rate") == null
+                        ? null : result.getDouble("hourly_rate"));
 
                 workers.add(worker);
             }

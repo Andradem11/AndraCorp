@@ -14,6 +14,7 @@ import {
   CircleDollarSign
 } from "lucide-react";
 import "./ClientDashboard.css";
+import ClientChangeOrders from "./ClientChangeOrders";
 
 const money = (value) => `$${Number(value || 0).toLocaleString()}`;
 const progress = (value) => Math.max(0, Math.min(100, Number(value) || 0));
@@ -452,10 +453,18 @@ export default function ClientDashboard({
                   ))}
                 </>
               )}
-              {/* Sections not implemented yet */}
-              {["Change Orders", "Daily Reports"].includes(section) && (
+              {/* Client change order requests and negotiation */}
+              {section === "Change Orders" && (
+                <ClientChangeOrders
+                  clientId={client?.clientId}
+                  projects={projects}
+                />
+              )}
+
+              {/* Daily reports will be implemented later */}
+              {section === "Daily Reports" && (
                 <>
-                  <h1>{section}</h1>
+                  <h1>Daily Reports</h1>
                   <div className="cd-panel">
                     <h3>Coming soon</h3>
                   </div>

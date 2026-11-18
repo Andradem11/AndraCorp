@@ -1,0 +1,128 @@
+.cco-page { 
+	color: #edf3fb; 
+}
+.cco-header { 
+	display: flex; 
+	align-items: center; 
+	justify-content: space-between; 
+	gap: 16px; flex-wrap: wrap; 
+	margin-bottom: 22px; 
+}
+.cco-header h1 { 
+	margin: 0 0 8px; 
+}
+.cco-header p, .cco-panel > p, .cco-note { 
+	color: #a9b8cb; 
+}
+.cco-panel { 
+	background: #0e2238; 
+	border: 1px solid #2c435b; 
+	border-radius: 14px; 
+	padding: 22px; 
+	margin-bottom: 22px; 
+}
+.cco-panel h2 { 
+	margin: 0 0 12px; 
+	font-size: 21px; 
+}
+.cco-form { 
+	display: grid; 
+	gap: 12px; 
+}
+.cco-form label, .cco-decline label { 
+	display: grid; 
+	gap: 7px; 
+	font-weight: 600; 
+}
+.cco-form input, .cco-form select, .cco-form textarea, .cco-decline textarea { 
+	width: 100%; 
+	padding: 12px; 
+	border: 1px solid #425a72; 
+	border-radius: 8px; 
+	background: #071526; 
+	color: #edf3fb; 
+	font: inherit; 
+}
+.cco-costs { 
+	display: grid; 
+	grid-template-columns: repeat(3, minmax(0, 1fr)); 
+	gap: 12px; 
+}
+.cco-page button { 
+	border: 0; 
+	background: #f6a313; 
+	color: #09192b; 
+	border-radius: 8px; 
+	padding: 11px 16px; 
+	font-weight: 700; 
+	cursor: pointer; 
+}
+.cco-page button:disabled { 
+	opacity: .55; 
+	cursor: not-allowed; 
+}
+.cco-page .cco-secondary { 
+	background: #253b52; 
+	color: #f0f5fa; 
+}
+.cco-estimate { 
+	font-weight: 700; 
+	color: #f6a313; 
+}
+.cco-note { 
+	font-size: 13px; 
+	margin: 0; 
+}
+.cco-order { 
+	border-top: 1px solid #2c435b; 
+	padding: 18px 0; 
+}
+.cco-order:first-of-type { 
+	margin-top: 8px; 
+}
+.cco-order-heading { 
+	display: flex; 
+	justify-content: space-between; 
+	gap: 12px; 
+	align-items: flex-start; 
+}
+.cco-order-heading h3 { 
+	margin: 0 0 6px; 
+}
+.cco-order-heading small { 
+	color: #a9b8cb; 
+}
+.cco-status { 
+	border: 1px solid #506078; 
+	border-radius: 18px; 
+	padding: 5px 10px; 
+	font-size: 12px; 
+	white-space: nowrap; 
+}
+.cco-actions { 
+	display: flex; 
+	gap: 10px; 
+	flex-wrap: wrap; 
+	margin-top: 14px; 
+}
+.cco-decline { 
+	display: grid; 
+	gap: 10px; 
+	margin-top: 14px; 
+}
+.cco-error { 
+	color: #ffaaa7; } 
+	.cco-success { 
+		color: #91e2b0; 
+	}
+@media (max-width: 700px) { 
+	.cco-costs { 
+		grid-template-columns: 1fr; 
+	} .cco-panel { 
+		padding: 16px; 
+	} 
+}
+
+
+
+
