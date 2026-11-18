@@ -162,6 +162,43 @@ public class ExpenseBudgetImpl
                             + e.getMessage());
         }
 
+        // Labor is calculated from work-hour snapshots, not copied into expenses.
+        // This avoids double-counting and keeps each hour linked to its worker.
+        String laborSql = """
+                SELECT h.id, h.task_id, h.work_date, h.hours,
+                       h.hourly_rate, h.labor_cost, w.worker_name, w.trade
+                FROM work_hours h
+                JOIN workers w ON w.worker_id = h.worker_id
+                WHERE w.project_id = ?
+                ORDER BY h.work_date DESC, h.id DESC;
+                """;
+
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(laborSql)) {
+
+            statement.setString(1, projectId);
+            try (ResultSet result = statement.executeQuery()) {
+                while (result.next()) {
+                    Map<String, Object> labor = new HashMap<>();
+                    labor.put("expenseId", "labor-" + result.getInt("id"));
+                    labor.put("projectId", projectId);
+                    labor.put("type", "LABOR");
+                    labor.put("workDate", result.getString("work_date"));
+                    labor.put("hours", result.getDouble("hours"));
+                    labor.put("hourlyRate", result.getObject("hourly_rate"));
+                    labor.put("priced", result.getObject("labor_cost") != null);
+                    labor.put("amount", result.getObject("labor_cost"));
+                    labor.put("description", result.getString("worker_name") +
+                            " (" + result.getString("trade") + ") - " +
+                            result.getDouble("hours") + " hours - " +
+                            result.getString("task_id"));
+                    expenses.add(labor);
+                }
+            }
+        } catch (SQLException e) {
+            System.out.println("Could not retrieve labor costs: " + e.getMessage());
+        }
+
         return expenses;
     }
 
@@ -172,9 +209,13 @@ public class ExpenseBudgetImpl
             String projectId) {
 
         String sql = """
-                SELECT SUM(amount) AS total
-                FROM expenses
-                WHERE project_id = ?;
+                SELECT
+                    COALESCE((SELECT SUM(amount) FROM expenses WHERE project_id = ?), 0)
+                    +
+                    COALESCE((SELECT SUM(h.labor_cost)
+                              FROM work_hours h
+                              JOIN workers w ON w.worker_id = h.worker_id
+                              WHERE w.project_id = ?), 0) AS total;
                 """;
 
         try (Connection connection =
@@ -186,6 +227,8 @@ public class ExpenseBudgetImpl
             statement.setString(
                     1,
                     projectId);
+
+statement.setString(2, projectId);
 
             try (ResultSet result =
                          statement.executeQuery()) {

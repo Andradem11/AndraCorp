@@ -16,6 +16,20 @@ public class ChangeOrder {
     private boolean clientApproved;
     private boolean contractorApproved;
     private int proposalVersion;
+    private double laborCostChange;
+    private double materialCostChange;
+    private double equipmentCostChange;
+    private Double simulatedCostImpact;
+    private Double finalCostImpact;
+    private String declineReason;
+
+    private String changeType;
+    private String workforceAction;
+    private Integer requestedWorkerCount;
+    private String sourceArea;
+    private String targetArea;
+    private String materialPreference;
+
 
     public ChangeOrder(
             String changeOrderId,
@@ -33,6 +47,20 @@ public class ChangeOrder {
         this.contractorApproved = false;
         this.proposalVersion = 1;
     }
+
+    public String getChangeType() { return changeType; }
+    public String getWorkforceAction() { return workforceAction; }
+    public Integer getRequestedWorkerCount() { return requestedWorkerCount; }
+    public String getSourceArea() { return sourceArea; }
+    public String getTargetArea() { return targetArea; }
+    public String getMaterialPreference() { return materialPreference; }
+
+    public void setChangeType(String value) { changeType = value; }
+    public void setWorkforceAction(String value) { workforceAction = value; }
+    public void setRequestedWorkerCount(Integer value) { requestedWorkerCount = value; }
+    public void setSourceArea(String value) { sourceArea = value; }
+    public void setTargetArea(String value) { targetArea = value; }
+    public void setMaterialPreference(String value) { materialPreference = value; }
 
     // Get methods
     public String getChangeOrderId() {
@@ -81,6 +109,44 @@ public class ChangeOrder {
 
     public int getProposalVersion() {
         return proposalVersion;
+    }
+
+    // Cost simulation and contractor pricing.
+    public double getLaborCostChange() {
+        return laborCostChange;
+    }
+    public double getMaterialCostChange() {
+        return materialCostChange;
+    }
+    public double getEquipmentCostChange() {
+        return equipmentCostChange;
+    }
+    public Double getSimulatedCostImpact() {
+        return simulatedCostImpact;
+    }
+    public Double getFinalCostImpact() {
+        return finalCostImpact;
+    }
+    public String getDeclineReason() {
+        return declineReason;
+    }
+    public void setLaborCostChange(double laborCostChange) {
+        this.laborCostChange = laborCostChange;
+    }
+    public void setMaterialCostChange(double materialCostChange) {
+        this.materialCostChange = materialCostChange;
+    }
+    public void setEquipmentCostChange(double equipmentCostChange) {
+        this.equipmentCostChange = equipmentCostChange;
+    }
+    public void setSimulatedCostImpact(Double simulatedCostImpact) {
+        this.simulatedCostImpact = simulatedCostImpact;
+    }
+    public void setFinalCostImpact(Double finalCostImpact) {
+        this.finalCostImpact = finalCostImpact;
+    }
+    public void setDeclineReason(String declineReason) {
+        this.declineReason = declineReason;
     }
 
     // Set methods

@@ -8,6 +8,7 @@ public class Worker {
     private String trade;
     private String area;
     private String taskId;
+    private Double hourlyRate;
 
     public Worker(String workerId, String projectId, String workerName, String trade) {
         this.workerId = workerId;
@@ -31,6 +32,12 @@ public class Worker {
     }
     public String getArea() {
         return area;
+    }
+    public Double getHourlyRate() {
+        return hourlyRate;
+    }
+    public void setHourlyRate(Double hourlyRate) {
+        this.hourlyRate = hourlyRate;
     }
     public String getTaskId() {
         return taskId;

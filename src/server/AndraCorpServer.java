@@ -1,6 +1,7 @@
 package server;
 
 import applicationimpl.ChangeOrderImpl;
+import applicationimpl.WorkforceProposalEstimator;
 import applicationimpl.ExpenseBudgetImpl;
 import applicationimpl.MaterialEquipmentImpl;
 import applicationimpl.ProjectManagementImpl;
@@ -10,6 +11,12 @@ import io.javalin.Javalin;
 import model.ChangeOrder;
 import storageimpl.DatabaseManager;
 import java.util.HashMap;
+import java.util.ArrayList;
+import java.util.List;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.Map;
 
 /*
@@ -1003,6 +1010,92 @@ public class AndraCorpServer {
 
         });
 
+        // Contractor-configured hourly billing rates for each trade.
+        app.get("/api/trade-rates", ctx -> {
+            List<Map<String, Object>> rates = new ArrayList<>();
+            try (Connection connection = DatabaseManager.getConnection();
+                 PreparedStatement statement = connection.prepareStatement(
+                         "SELECT trade, hourly_rate FROM trade_rates ORDER BY trade");
+                 ResultSet result = statement.executeQuery()) {
+                while (result.next()) {
+                    rates.add(Map.of("trade", result.getString("trade"),
+                            "hourlyRate", result.getDouble("hourly_rate")));
+                }
+                ctx.json(rates);
+            } catch (SQLException e) {
+                ctx.status(500).json(Map.of("error", "Could not load trade rates."));
+            }
+        });
+
+        app.put("/api/trade-rates/{trade}", ctx -> {
+            String trade = ctx.pathParam("trade");
+            Map<?, ?> request = ctx.bodyAsClass(Map.class);
+            Object rawRate = request.get("hourlyRate");
+            double rate;
+            try {
+                rate = Double.parseDouble(String.valueOf(rawRate));
+            } catch (NumberFormatException e) {
+                ctx.status(400).json(Map.of("error", "A valid hourly rate is required."));
+                return;
+            }
+            if (!Double.isFinite(rate) || rate < 0 || trade.isBlank()) {
+                ctx.status(400).json(Map.of("error", "Hourly rate must be zero or greater."));
+                return;
+            }
+            try (Connection connection = DatabaseManager.getConnection();
+                 PreparedStatement statement = connection.prepareStatement("""
+                         INSERT INTO trade_rates(trade, hourly_rate) VALUES (?, ?)
+                         ON CONFLICT(trade) DO UPDATE SET hourly_rate = excluded.hourly_rate
+                         """)) {
+                statement.setString(1, trade);
+                statement.setDouble(2, rate);
+                statement.executeUpdate();
+                ctx.json(Map.of("trade", trade, "hourlyRate", rate));
+            } catch (SQLException e) {
+                ctx.status(500).json(Map.of("error", "Could not save trade rate."));
+            }
+        });
+
+        // Updates one worker's hourly rate without changing the trade default.
+        // Previously recorded labor costs keep their original rate snapshots.
+        app.put("/api/workers/{id}/hourly-rate", ctx -> {
+            String workerId = ctx.pathParam("id");
+            Map<?, ?> request = ctx.bodyAsClass(Map.class);
+            Object rawRate = request.get("hourlyRate");
+            double hourlyRate;
+
+            try {
+                if (rawRate == null || String.valueOf(rawRate).isBlank()) {
+                    throw new NumberFormatException();
+                }
+                hourlyRate = Double.parseDouble(String.valueOf(rawRate));
+            } catch (NumberFormatException e) {
+                ctx.status(400).json(Map.of("error", "Enter a valid hourly rate."));
+                return;
+            }
+
+            if (!Double.isFinite(hourlyRate) || hourlyRate < 0) {
+                ctx.status(400).json(Map.of("error", "Hourly rate must be zero or greater."));
+                return;
+            }
+
+            try (Connection connection = DatabaseManager.getConnection();
+                 PreparedStatement statement = connection.prepareStatement(
+                         "UPDATE workers SET hourly_rate = ? WHERE worker_id = ? AND is_active = 1")) {
+                statement.setDouble(1, hourlyRate);
+                statement.setString(2, workerId);
+
+                if (statement.executeUpdate() == 0) {
+                    ctx.status(404).json(Map.of("error", "Active worker not found."));
+                    return;
+                }
+
+                ctx.json(Map.of("workerId", workerId, "hourlyRate", hourlyRate));
+            } catch (SQLException e) {
+                ctx.status(500).json(Map.of("error", "Could not update worker hourly rate."));
+            }
+        });
+
         // Adds a new worker to a project.
         app.post("/api/workers", ctx -> {
 
@@ -1072,6 +1165,20 @@ public class AndraCorpServer {
             response.put(
                     "trade",
                     request.getTrade());
+            try (Connection connection = DatabaseManager.getConnection();
+                 PreparedStatement statement = connection.prepareStatement(
+                         "SELECT hourly_rate FROM workers WHERE worker_id = ?")) {
+                statement.setString(1, workerId);
+                try (ResultSet result = statement.executeQuery()) {
+                    if (result.next()) {
+                        response.put("hourlyRate", result.getObject(1) == null
+                                ? null : result.getDouble(1));
+                    }
+                }
+            } catch (SQLException e) {
+                System.out.println("Could not load worker rate: " + e.getMessage());
+            }
+
 
             response.put(
                     "area",
@@ -1222,7 +1329,400 @@ public class AndraCorpServer {
 
             ctx.json(workforceManager.getWorkerHours(workerId));
         });
-    
+
+        // Creates a client or contractor change request.
+        app.post("/api/change-orders", ctx -> {
+            Map<String, Object> request;
+            try {
+                request = ctx.bodyAsClass(Map.class);
+            } catch (Exception e) {
+                ctx.status(400).json(Map.of("error", "Invalid request body."));
+                return;
+            }
+
+            Object projectId = request.get("projectId");
+            Object requestedBy = request.get("requestedBy");
+            Object description = request.get("description");
+
+            if (!(projectId instanceof String) || ((String) projectId).isBlank()
+                    || !(requestedBy instanceof String)
+                    || !(description instanceof String) || ((String) description).isBlank()
+                    || (!((String) requestedBy).equalsIgnoreCase("CLIENT")
+                    && !((String) requestedBy).equalsIgnoreCase("CONTRACTOR"))) {
+                ctx.status(400).json(Map.of("error", "Valid projectId, requestedBy, and description are required."));
+                return;
+            }
+
+            // Old clients may omit changeType; their orders remain GENERAL.
+            Object typeValue = request.getOrDefault("changeType", "GENERAL");
+            Object actionValue = request.get("workforceAction");
+            Object countValue = request.get("requestedWorkerCount");
+            Object sourceValue = request.get("sourceArea");
+            Object targetValue = request.get("targetArea");
+            Object materialValue = request.get("materialPreference");
+            if (!(typeValue instanceof String)
+                    || (actionValue != null && !(actionValue instanceof String))
+                    || (countValue != null && (!(countValue instanceof Number)
+                        || ((Number) countValue).doubleValue() != ((Number) countValue).intValue()))
+                    || (sourceValue != null && !(sourceValue instanceof String))
+                    || (targetValue != null && !(targetValue instanceof String))
+                    || (materialValue != null && !(materialValue instanceof String))) {
+                ctx.status(400).json(Map.of("error", "Invalid structured change request."));
+                return;
+            }
+            String id = changeOrderManager.createStructuredChangeOrder(
+                    (String) projectId, (String) requestedBy, (String) description,
+                    (String) typeValue, (String) actionValue,
+                    countValue == null ? null : ((Number) countValue).intValue(),
+                    (String) sourceValue, (String) targetValue, (String) materialValue);
+            if (id == null) {
+                ctx.status(400).json(Map.of("error", "Could not create change order. Check the project is active and has a client."));
+                return;
+            }
+            ctx.status(201).json(changeOrderManager.getChangeOrder(id));
+        });
+
+        // Simulates labor, material, and equipment changes for a client request.
+        app.post("/api/change-orders/{id}/simulate", ctx -> {
+            Map<String, Object> request;
+            try {
+                request = ctx.bodyAsClass(Map.class);
+            } catch (Exception e) {
+                ctx.status(400).json(Map.of("error", "Invalid request body."));
+                return;
+            }
+
+            Object labor = request.get("laborCostChange");
+            Object materials = request.get("materialCostChange");
+            Object equipment = request.get("equipmentCostChange");
+            if (!(labor instanceof Number) || !(materials instanceof Number)
+                    || !(equipment instanceof Number)
+                    || !Double.isFinite(((Number) labor).doubleValue())
+                    || !Double.isFinite(((Number) materials).doubleValue())
+                    || !Double.isFinite(((Number) equipment).doubleValue())) {
+                ctx.status(400).json(Map.of("error", "Valid numeric laborCostChange, materialCostChange, and equipmentCostChange are required."));
+                return;
+            }
+
+            String id = ctx.pathParam("id");
+            boolean saved = changeOrderManager.simulateClientChange(id,
+                    ((Number) labor).doubleValue(),
+                    ((Number) materials).doubleValue(),
+                    ((Number) equipment).doubleValue());
+            if (!saved) {
+                ctx.status(409).json(Map.of("error", "Simulation failed. Order must be a pending client request."));
+                return;
+            }
+            ctx.json(changeOrderManager.getChangeOrder(id));
+        });
+
+        // Read-only workforce estimate. Does not create expenses or update a proposal.
+        app.post("/api/change-orders/{id}/workforce-estimate", ctx -> {
+            Map<String, Object> request;
+            try {
+                request = ctx.bodyAsClass(Map.class);
+            } catch (Exception e) {
+                ctx.status(400).json(Map.of("error", "Invalid request body."));
+                return;
+            }
+            Object contractorValue = request.get("contractorId");
+            Object tradeValue = request.get("trade");
+            Object countValue = request.get("workerCount");
+            Object hoursValue = request.get("hoursPerWorker");
+            if (!(contractorValue instanceof String contractorId) || contractorId.isBlank()
+                    || !(tradeValue instanceof String trade) || trade.isBlank()
+                    || !(countValue instanceof Number count) || count.doubleValue() != count.intValue()
+                    || !(hoursValue instanceof Number hours)) {
+                ctx.status(400).json(Map.of("error", "Contractor, trade, worker count, and estimated hours are required."));
+                return;
+            }
+            String sql = """
+                    SELECT tr.hourly_rate
+                    FROM change_orders co
+                    JOIN projects p ON p.project_id = co.project_id
+                    JOIN trade_rates tr ON LOWER(tr.trade) = LOWER(?)
+                    WHERE co.change_order_id = ? AND p.contractor_id = ?
+                      AND UPPER(p.status) = 'ACTIVE'
+                      AND co.status IN ('PENDING_REVIEW', 'COUNTERPROPOSAL_PENDING')
+                      AND co.change_type = 'WORKFORCE'
+                      AND co.workforce_action = 'ADD_WORKERS'
+                    """;
+            try (Connection connection = DatabaseManager.getConnection();
+                 PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setString(1, trade.trim());
+                statement.setString(2, ctx.pathParam("id"));
+                statement.setString(3, contractorId);
+                try (ResultSet result = statement.executeQuery()) {
+                    if (!result.next()) {
+                        ctx.status(404).json(Map.of("error", "Eligible workforce request or configured trade rate not found."));
+                        return;
+                    }
+                    double rate = result.getDouble("hourly_rate");
+                    double estimate = WorkforceProposalEstimator.calculate(count.intValue(), hours.doubleValue(), rate);
+                    ctx.json(Map.of("trade", trade.trim(), "workerCount", count.intValue(),
+                            "hoursPerWorker", hours.doubleValue(), "hourlyRate", rate,
+                            "estimatedLaborCost", estimate,
+                            "note", "Estimate only. No expenses or worker assignments have been changed."));
+                }
+            } catch (IllegalArgumentException e) {
+                ctx.status(400).json(Map.of("error", e.getMessage()));
+            } catch (SQLException e) {
+                ctx.status(500).json(Map.of("error", "Unable to calculate workforce estimate."));
+            }
+        });
+
+        // Read-only comparison for a client's worker reallocation request.
+        // Moving existing workers is not treated as newly incurred labor expense.
+        app.post("/api/change-orders/{id}/reallocation-compare", ctx -> {
+            Map<String, Object> input;
+            try { input = ctx.bodyAsClass(Map.class); }
+            catch (Exception e) { ctx.status(400).json(Map.of("error", "Invalid request body.")); return; }
+            Object contractor = input.get("contractorId");
+            Object idsValue = input.get("workerIds");
+            Object hoursValue = input.get("hoursPerWorker");
+            Object tradeValue = input.get("hireTrade");
+            if (!(contractor instanceof String contractorId) || contractorId.isBlank()
+                    || !(idsValue instanceof List<?> workerIds) || workerIds.isEmpty()
+                    || !(hoursValue instanceof Number hours) || !(tradeValue instanceof String hireTrade)
+                    || hireTrade.isBlank() || !Double.isFinite(hours.doubleValue()) || hours.doubleValue() <= 0) {
+                ctx.status(400).json(Map.of("error", "Contractor, selected workers, positive hours, and hiring trade are required.")); return;
+            }
+            if (workerIds.size() > 100 || workerIds.stream().anyMatch(id -> !(id instanceof String) || ((String) id).isBlank())
+                    || workerIds.stream().distinct().count() != workerIds.size()) {
+                ctx.status(400).json(Map.of("error", "Worker IDs must be unique and valid.")); return;
+            }
+            String eligibilitySql = """
+                    SELECT co.project_id, co.source_area, co.target_area, co.requested_worker_count
+                    FROM change_orders co JOIN projects p ON p.project_id = co.project_id
+                    WHERE co.change_order_id = ? AND p.contractor_id = ? AND UPPER(p.status) = 'ACTIVE'
+                    AND co.change_type = 'WORKFORCE' AND co.workforce_action = 'REALLOCATE'
+                    AND co.status IN ('PENDING_REVIEW', 'COUNTERPROPOSAL_PENDING')
+                    """;
+            try (Connection connection = DatabaseManager.getConnection();
+                 PreparedStatement eligible = connection.prepareStatement(eligibilitySql)) {
+                eligible.setString(1, ctx.pathParam("id")); eligible.setString(2, contractorId);
+                try (ResultSet order = eligible.executeQuery()) {
+                    if (!order.next()) { ctx.status(404).json(Map.of("error", "Eligible reallocation request not found.")); return; }
+                    String projectId = order.getString("project_id");
+                    String source = order.getString("source_area");
+                    String target = order.getString("target_area");
+                    int requested = order.getInt("requested_worker_count");
+                    if (source == null || target == null || source.isBlank() || target.isBlank()
+                            || source.equalsIgnoreCase(target) || workerIds.size() != requested || requested < 1) {
+                        ctx.status(400).json(Map.of("error", "Select exactly the requested number of workers from distinct work areas.")); return;
+                    }
+                    List<Map<String, Object>> selected = new ArrayList<>();
+                    double existingHourlyCost = 0;
+                    String workerSql = "SELECT worker_name, trade, hourly_rate FROM workers WHERE worker_id = ? AND project_id = ? AND area = ? AND is_active = 1";
+                    try (PreparedStatement worker = connection.prepareStatement(workerSql)) {
+                        for (Object id : workerIds) {
+                            worker.setString(1, (String) id); worker.setString(2, projectId); worker.setString(3, source);
+                            try (ResultSet result = worker.executeQuery()) {
+                                if (!result.next()) { ctx.status(400).json(Map.of("error", "Selected worker is not active in the requested source area.")); return; }
+                                double rate = result.getDouble("hourly_rate");
+                                if (result.wasNull() || !Double.isFinite(rate) || rate < 0) {
+                                    ctx.status(400).json(Map.of("error", "Selected worker has no valid hourly rate.")); return;
+                                }
+                                existingHourlyCost += rate;
+                                selected.add(Map.of("workerId", id, "name", result.getString("worker_name"),
+                                        "trade", result.getString("trade") == null ? "Unspecified" : result.getString("trade"), "hourlyRate", rate));
+                            }
+                        }
+                    }
+                    try (PreparedStatement rateQuery = connection.prepareStatement("SELECT hourly_rate FROM trade_rates WHERE LOWER(trade) = LOWER(?)")) {
+                        rateQuery.setString(1, hireTrade.trim());
+                        try (ResultSet rates = rateQuery.executeQuery()) {
+                            if (!rates.next()) { ctx.status(400).json(Map.of("error", "No configured rate for the hiring trade.")); return; }
+                            double hireRate = rates.getDouble(1);
+                            double hireCost = WorkforceProposalEstimator.calculate(requested, hours.doubleValue(), hireRate);
+                            Map<String, Object> comparison = new java.util.HashMap<>();
+                            comparison.put("sourceArea", source);
+                            comparison.put("targetArea", target);
+                            comparison.put("selectedWorkers", selected);
+                            comparison.put("estimatedHoursPerWorker", hours.doubleValue());
+                            comparison.put("existingLaborAllocationValue", Math.round(existingHourlyCost * hours.doubleValue() * 100.0) / 100.0);
+                            comparison.put("reallocationAdditionalLaborCost", 0);
+                            comparison.put("hiringTrade", hireTrade.trim());
+                            comparison.put("hiringHourlyRate", hireRate);
+                            comparison.put("hiringAdditionalLaborCost", hireCost);
+                            // Scenario forecast only: remaining effort and productivity are contractor assumptions.
+                            // This does not modify task dates, worker assignments, expenses or approvals.
+                            Object sourceEffort = input.get("sourceRemainingWorkerHours");
+                            Object targetEffort = input.get("targetRemainingWorkerHours");
+                            Object dailyCapacity = input.get("productiveHoursPerWorkerDay");
+                            if (sourceEffort instanceof Number se && targetEffort instanceof Number te
+                                    && dailyCapacity instanceof Number dc
+                                    && Double.isFinite(se.doubleValue()) && se.doubleValue() >= 0
+                                    && Double.isFinite(te.doubleValue()) && te.doubleValue() >= 0
+                                    && Double.isFinite(dc.doubleValue()) && dc.doubleValue() > 0 && dc.doubleValue() <= 24) {
+                                int sourceCount = 0;
+                                int targetCount = 0;
+                                try (PreparedStatement counts = connection.prepareStatement(
+                                        "SELECT area, COUNT(*) AS n FROM workers WHERE project_id = ? AND is_active = 1 AND (area = ? OR area = ?) GROUP BY area")) {
+                                    counts.setString(1, projectId);
+                                    counts.setString(2, source);
+                                    counts.setString(3, target);
+                                    try (ResultSet rs = counts.executeQuery()) {
+                                        while (rs.next()) {
+                                            if (source.equals(rs.getString("area"))) sourceCount = rs.getInt("n");
+                                            if (target.equals(rs.getString("area"))) targetCount = rs.getInt("n");
+                                        }
+                                    }
+                                }
+                                if (sourceCount >= requested && targetCount > 0) {
+                                    double capacity = dc.doubleValue();
+                                    double baselineSource = se.doubleValue() / (sourceCount * capacity);
+                                    double baselineTarget = te.doubleValue() / (targetCount * capacity);
+                                    Double movedSource = sourceCount > requested
+                                            ? se.doubleValue() / ((sourceCount - requested) * capacity) : null;
+                                    double movedTarget = te.doubleValue() / ((targetCount + requested) * capacity);
+                                    double hiredTarget = movedTarget;
+                                    Map<String, Object> forecast = new java.util.HashMap<>();
+                                    forecast.put("sourceWorkersBefore", sourceCount);
+                                    forecast.put("targetWorkersBefore", targetCount);
+                                    forecast.put("baselineSourceDays", baselineSource);
+                                    forecast.put("baselineTargetDays", baselineTarget);
+                                    forecast.put("moveSourceDays", movedSource);
+                                    forecast.put("moveTargetDays", movedTarget);
+                                    forecast.put("hireSourceDays", baselineSource);
+                                    forecast.put("hireTargetDays", hiredTarget);
+                                    forecast.put("targetDaysSaved", baselineTarget - movedTarget);
+                                    forecast.put("sourceDaysDelayed", movedSource == null ? null : movedSource - baselineSource);
+                                    forecast.put("assumptions", "Remaining effort is in worker-hours; all counted workers are assumed equally productive and qualified. Calendar dependencies and availability are not modeled.");
+                                    comparison.put("scheduleScenario", forecast);
+                                    comparison.put("scheduleImpact", "Illustrative capacity-based scenario, not a committed completion date.");
+                                } else {
+                                    comparison.put("scheduleImpact", "Insufficient staffing for this scenario: source must have the selected workers and target must have at least one worker.");
+                                }
+                            } else {
+                                comparison.put("scheduleImpact", "Enter nonnegative remaining worker-hours for both areas and productive hours per worker per day (greater than 0, up to 24) to compare schedule scenarios.");
+                            }
+                            comparison.put("note", "Comparison only. Existing worker pay is not a new expense. No workers, budgets, or approvals were changed.");
+                            ctx.json(comparison);
+                        }
+                    }
+                }
+            } catch (SQLException e) { ctx.status(500).json(Map.of("error", "Unable to compare workforce options.")); }
+              catch (IllegalArgumentException e) { ctx.status(400).json(Map.of("error", e.getMessage())); }
+        });
+
+        // Contractor confirms the proposed cost and schedule impact.
+        app.post("/api/change-orders/{id}/proposal", ctx -> {
+            Map<String, Object> request;
+            try {
+                request = ctx.bodyAsClass(Map.class);
+            } catch (Exception e) {
+                ctx.status(400).json(Map.of("error", "Invalid request body."));
+                return;
+            }
+
+            Object contractorId = request.get("contractorId");
+            Object solution = request.get("proposedSolution");
+            Object cost = request.get("finalCostImpact");
+            Object days = request.get("scheduleImpact");
+            if (!(contractorId instanceof String) || ((String) contractorId).isBlank()
+                    || !(solution instanceof String) || ((String) solution).isBlank()
+                    || !(cost instanceof Number) || !Double.isFinite(((Number) cost).doubleValue())
+                    || !(days instanceof Number) || !Double.isFinite(((Number) days).doubleValue())
+                    || ((Number) days).doubleValue() != ((Number) days).intValue()) {
+                ctx.status(400).json(Map.of("error", "Valid contractorId, proposedSolution, finalCostImpact, and integer scheduleImpact are required."));
+                return;
+            }
+
+            String id = ctx.pathParam("id");
+            boolean saved = changeOrderManager.submitContractorProposal(id,
+                    (String) contractorId, (String) solution,
+                    ((Number) cost).doubleValue(), ((Number) days).intValue());
+            if (!saved) {
+                ctx.status(409).json(Map.of("error", "Proposal failed. Check contractor assignment and order status."));
+                return;
+            }
+            ctx.json(changeOrderManager.getChangeOrder(id));
+        });
+
+        // Client approves the contractor-confirmed proposal.
+        app.post("/api/change-orders/{id}/approve", ctx -> {
+            Map<String, Object> request;
+            try {
+                request = ctx.bodyAsClass(Map.class);
+            } catch (Exception e) {
+                ctx.status(400).json(Map.of("error", "Invalid request body."));
+                return;
+            }
+            Object clientId = request.get("clientId");
+            if (!(clientId instanceof String) || ((String) clientId).isBlank()) {
+                ctx.status(400).json(Map.of("error", "Valid clientId is required."));
+                return;
+            }
+            String id = ctx.pathParam("id");
+            if (!changeOrderManager.approveAsClient(id, (String) clientId)) {
+                ctx.status(409).json(Map.of("error", "Approval failed. Check client assignment and order status."));
+                return;
+            }
+            ctx.json(changeOrderManager.getChangeOrder(id));
+        });
+
+        // Client declines a proposal and explains why.
+        app.post("/api/change-orders/{id}/decline", ctx -> {
+            Map<String, Object> request;
+            try {
+                request = ctx.bodyAsClass(Map.class);
+            } catch (Exception e) {
+                ctx.status(400).json(Map.of("error", "Invalid request body."));
+                return;
+            }
+            Object clientId = request.get("clientId");
+            Object reason = request.get("reason");
+            if (!(clientId instanceof String) || ((String) clientId).isBlank()
+                    || !(reason instanceof String) || ((String) reason).isBlank()) {
+                ctx.status(400).json(Map.of("error", "Valid clientId and decline reason are required."));
+                return;
+            }
+            String id = ctx.pathParam("id");
+            if (!changeOrderManager.declineAsClient(id, (String) clientId, (String) reason)) {
+                ctx.status(409).json(Map.of("error", "Decline failed. Check client assignment and order status."));
+                return;
+            }
+            ctx.json(changeOrderManager.getChangeOrder(id));
+        });
+
+        // Client suggests a different material or another solution.
+        // Prototype-only: clientId is not authenticated yet.
+        app.post("/api/change-orders/{id}/counterproposal", ctx -> {
+            Map<String, Object> request;
+            try {
+                request = ctx.bodyAsClass(Map.class);
+            } catch (Exception e) {
+                ctx.status(400).json(Map.of("error", "Invalid request body."));
+                return;
+            }
+            Object clientId = request.get("clientId");
+            Object suggestion = request.get("suggestion");
+            if (!(clientId instanceof String) || ((String) clientId).isBlank()
+                    || !(suggestion instanceof String) || ((String) suggestion).isBlank()) {
+                ctx.status(400).json(Map.of("error", "Valid clientId and suggestion are required."));
+                return;
+            }
+            String id = ctx.pathParam("id");
+            if (!changeOrderManager.submitClientCounterproposal(
+                    id, (String) clientId, (String) suggestion)) {
+                ctx.status(409).json(Map.of("error", "Counterproposal failed. Check client assignment and order status."));
+                return;
+            }
+            ctx.json(changeOrderManager.getChangeOrder(id));
+        });
+
+        // Returns the recorded actions for a change order.
+        // Development-only until session authorization is implemented.
+        app.get("/api/change-orders/{id}/history", ctx -> {
+            String id = ctx.pathParam("id");
+            if (changeOrderManager.getChangeOrder(id) == null) {
+                ctx.status(404).json(Map.of("error", "Change order not found."));
+                return;
+            }
+            ctx.json(changeOrderManager.getChangeOrderHistory(id));
+        });
+
         // Retrieves a change order by its ID.
         // Development-only route until authentication is implemented.
         app.get("/api/change-orders/{id}", ctx -> {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import "./App.css";
 import ClientPortal from "./ClientPortal";
+import ContractorChangeOrders from "./ContractorChangeOrders";
 import {
   LayoutDashboard,
   FolderKanban,
@@ -47,6 +48,9 @@ function ContractorApp() {
   const [inactiveWorkers, setInactiveWorkers] = useState([]);
   const [workerActionBusy, setWorkerActionBusy] = useState(false);
   const [workerActionError, setWorkerActionError] = useState("");
+  const [rateWorker, setRateWorker] = useState(null);
+  const [workerRateInput, setWorkerRateInput] = useState("");
+  const [workerRateError, setWorkerRateError] = useState("");
   const [workerSearch, setWorkerSearch] = useState("");
   const [workerTradeFilter, setWorkerTradeFilter] = useState("ALL");
   const [workerProjectFilter, setWorkerProjectFilter] = useState("ALL");
@@ -79,6 +83,96 @@ function ContractorApp() {
    * Stores the worker information entered
    * in the Add Worker form.
    */
+  const tradeNames = ["Carpentry", "Electrical", "Plumbing", "Painting", "Flooring", "Sheetrock", "Other"];
+  const [tradeRates, setTradeRates] = useState({});
+  const [showTradeRates, setShowTradeRates] = useState(false);
+  const [tradeRateError, setTradeRateError] = useState("");
+  const [tradeRateMessage, setTradeRateMessage] = useState("");
+  const [savingTradeRates, setSavingTradeRates] = useState(false);
+
+  const loadTradeRates = async () => {
+    const response = await fetch("http://localhost:7070/api/trade-rates");
+    if (!response.ok) throw new Error("Could not load trade rates.");
+    const data = await response.json();
+    const next = {};
+    data.forEach((item) => { next[item.trade] = String(item.hourlyRate); });
+    setTradeRates(next);
+  };
+
+  useEffect(() => {
+    loadTradeRates().catch((error) => setTradeRateError(error.message));
+  }, []);
+
+  const saveTradeRates = async () => {
+    setTradeRateError("");
+    setTradeRateMessage("");
+    setSavingTradeRates(true);
+    try {
+      for (const trade of tradeNames) {
+        const raw = tradeRates[trade];
+        if (raw === undefined || String(raw).trim() === "") continue;
+        const hourlyRate = Number(raw);
+        if (!Number.isFinite(hourlyRate) || hourlyRate < 0) {
+          throw new Error(`Invalid rate for ${trade}.`);
+        }
+        const response = await fetch(`http://localhost:7070/api/trade-rates/${encodeURIComponent(trade)}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ hourlyRate })
+        });
+        if (!response.ok) throw new Error(`Could not save ${trade} rate.`);
+      }
+      await loadTradeRates();
+      setTradeRateMessage("Trade rates saved. New workers will use these rates.");
+    } catch (error) {
+      setTradeRateError(error.message);
+    } finally {
+      setSavingTradeRates(false);
+    }
+  };
+
+  const openWorkerRateForm = (worker) => {
+    setRateWorker(worker);
+    setWorkerRateInput(worker.hourlyRate == null ? "" : String(worker.hourlyRate));
+    setWorkerRateError("");
+  };
+
+  const saveWorkerRate = async (event) => {
+    event.preventDefault();
+    if (!rateWorker || workerActionBusy) return;
+
+    const hourlyRate = Number(workerRateInput);
+    if (workerRateInput.trim() === "" || !Number.isFinite(hourlyRate) || hourlyRate < 0) {
+      setWorkerRateError("Enter an hourly rate of zero or greater.");
+      return;
+    }
+
+    setWorkerActionBusy(true);
+    setWorkerRateError("");
+    try {
+      const response = await fetch(
+        `http://localhost:7070/api/workers/${encodeURIComponent(rateWorker.workerId)}/hourly-rate`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ hourlyRate })
+        }
+      );
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || "Could not save worker hourly rate.");
+      }
+      setWorkers((current) => current.map((worker) =>
+        worker.workerId === rateWorker.workerId ? { ...worker, hourlyRate } : worker
+      ));
+      setRateWorker(null);
+    } catch (error) {
+      setWorkerRateError(error.message);
+    } finally {
+      setWorkerActionBusy(false);
+    }
+  };
+
   const [newWorker, setNewWorker] = useState({
     workerName: "",
     trade: "",
@@ -1106,8 +1200,9 @@ function ContractorApp() {
           <span>Expenses & Budget</span>
         </button>
         <button
-          className="nav-button"
+          className={activePage === "Change Orders" ? "nav-button active" : "nav-button"}
           type="button"
+          onClick={() => setActivePage("Change Orders")}
         >
           <FileText size={20} />
           <span>Change Orders</span>
@@ -1166,6 +1261,10 @@ function ContractorApp() {
     </header>
 
       {/* Contractor Dashboard */}
+      {activePage === "Change Orders" && (
+        <ContractorChangeOrders projects={projects} contractorId="contractor1" />
+      )}
+
       {activePage === "Dashboard" && (
         <>
           {/* Dashboard welcome header */}
@@ -1533,7 +1632,10 @@ function ContractorApp() {
             <>
               <header className="dashboard-header workforce-page-header">
                 <div><h1>WORKFORCE</h1></div>
+                <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                  <button type="button" className="new-project-button" onClick={() => { setTradeRateError(""); setTradeRateMessage(""); setShowTradeRates(true); }}>Manage Trade Rates</button>
                 <button type="button" className="new-project-button" onClick={() => setShowWorkerForm(true)}>+ Add Worker</button>
+                </div>
               </header>
 
               <div className="workforce-overview-grid">
@@ -1571,7 +1673,7 @@ function ContractorApp() {
                         <div className="workforce-worker-main">
                           <div className="workforce-worker-identity">
                             <span className="workforce-avatar">{initials(worker.workerName)}</span>
-                            <div><h3>{worker.workerName}</h3><p>{worker.trade || "No trade"}</p><span className={`workforce-status ${assigned ? "assigned" : "unassigned"}`}>{assigned ? "Assigned" : "Unassigned"}</span></div>
+                            <div><h3>{worker.workerName}</h3><p>{worker.trade || "No trade"}</p><p>Rate: {worker.hourlyRate == null ? "Not set" : `$${Number(worker.hourlyRate).toFixed(2)}/hr`}</p><span className={`workforce-status ${assigned ? "assigned" : "unassigned"}`}>{assigned ? "Assigned" : "Unassigned"}</span></div>
                           </div>
                           <div className="workforce-worker-detail"><span>Project</span><strong>{getProjectName(worker.projectId)}</strong></div>
                           <div className="workforce-worker-detail"><span>Area</span><strong>{worker.area || "Not assigned"}</strong></div>
@@ -1579,6 +1681,7 @@ function ContractorApp() {
                           <div className="workforce-worker-detail workforce-hours"><span>Total Hours</span><strong>{hours === null ? "Loading..." : hours.toLocaleString(undefined, { maximumFractionDigits: 2 })}</strong></div>
                           <div className="workforce-worker-actions">
                             <button type="button" className="workforce-history-button" aria-expanded={historyOpen} onClick={() => setHistoryWorkerId((current) => current === worker.workerId ? null : worker.workerId)}><Eye size={15} />{historyOpen ? "Hide History" : "View History"}</button>
+                            <button type="button" className="workforce-assign-button" onClick={() => openWorkerRateForm(worker)}><Pencil size={15} />Edit Rate</button>
                             <button type="button" className="workforce-assign-button" onClick={() => openAssignmentForm(worker)}><RotateCcw size={15} />{assigned ? "Reassign" : "Assign"}</button>
                             <button type="button" className="workforce-record-button" disabled={!worker.taskId} onClick={() => openHoursForm(worker)}><Clock3 size={15} />Record Hours</button>
                             <button type="button" className="workforce-deactivate-button" disabled={workerActionBusy} onClick={() => handleDeleteWorker(worker)}><Trash2 size={15} />Deactivate</button>
@@ -1671,8 +1774,8 @@ function ContractorApp() {
                           {expenseLoading ? <p className="expenses-empty">Loading expenses...</p> : visibleExpenses.length === 0 ? <p className="expenses-empty">{projectExpenses.length === 0 ? "No expenses recorded for this project." : "No expenses match your search."}</p> : visibleExpenses.map((expense) => (
                             <div className="expenses-history-item" key={expense.expenseId}>
                               <div className="expenses-history-description"><CircleDollarSign size={19} /><strong>{expense.description}</strong></div>
-                              <strong className="expenses-history-amount">{formatMoney(expense.amount)}</strong>
-                              <button type="button" disabled={expenseSaving} onClick={() => handleRemoveExpense(expense)}><Trash2 size={15} /> Remove</button>
+                              <strong className="expenses-history-amount">{expense.type === "LABOR" && !expense.priced ? "Rate unavailable" : formatMoney(expense.amount)}</strong>
+                              {expense.type !== "LABOR" && <button type="button" disabled={expenseSaving} onClick={() => handleRemoveExpense(expense)}><Trash2 size={15} /> Remove</button>}
                             </div>
                           ))}
                         </div>
@@ -1948,6 +2051,78 @@ function ContractorApp() {
         </div>
       )}
 
+    {/* Contractor trade rate settings */}
+    {showTradeRates && (
+      <div className="modal-background">
+        <div className="project-modal">
+          <div className="modal-header">
+            <div>
+              <h2>Manage Trade Rates</h2>
+              <p>Set hourly labor rates used for future worker cost estimates.</p>
+            </div>
+            <button className="close-button" type="button" onClick={() => setShowTradeRates(false)}>×</button>
+          </div>
+          {tradeNames.map((trade) => (
+            <div key={trade} style={{ marginBottom: "12px" }}>
+              <label htmlFor={`rate-${trade}`}>{trade} ($/hour)</label>
+              <input
+                id={`rate-${trade}`}
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="Not configured"
+                value={tradeRates[trade] ?? ""}
+                onChange={(event) => setTradeRates((current) => ({ ...current, [trade]: event.target.value }))}
+              />
+            </div>
+          ))}
+          {tradeRateError && <p role="alert" style={{ color: "#b91c1c" }}>{tradeRateError}</p>}
+          {tradeRateMessage && <p style={{ color: "#166534" }}>{tradeRateMessage}</p>}
+          <p>Changing a default rate will not change existing workers or past hours.</p>
+          <div className="form-buttons">
+            <button type="button" className="cancel-button" onClick={() => setShowTradeRates(false)}>Close</button>
+            <button type="button" className="create-button" disabled={savingTradeRates} onClick={saveTradeRates}>
+              {savingTradeRates ? "Saving..." : "Save Rates"}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Edit an individual worker rate. Existing hour entries stay unchanged. */}
+    {rateWorker && (
+      <div className="modal-background">
+        <div className="project-modal">
+          <div className="modal-header">
+            <div>
+              <h2>Edit Worker Hourly Rate</h2>
+              <p>{rateWorker.workerName} — {rateWorker.trade}</p>
+            </div>
+            <button type="button" className="close-button" onClick={() => setRateWorker(null)}>×</button>
+          </div>
+          <form onSubmit={saveWorkerRate}>
+            <label htmlFor="individual-worker-rate">Hourly rate ($/hour)</label>
+            <input
+              id="individual-worker-rate"
+              type="number"
+              min="0"
+              step="0.01"
+              required
+              value={workerRateInput}
+              onChange={(event) => setWorkerRateInput(event.target.value)}
+              placeholder="Example: 65.00"
+            />
+            <p>This changes only this worker's rate for future work hours.
+              Previous labor costs and the trade default will not change.</p>
+            {workerRateError && <p role="alert" className="workforce-error">{workerRateError}</p>}
+            <button type="submit" className="new-project-button" disabled={workerActionBusy}>
+              {workerActionBusy ? "Saving..." : "Save Worker Rate"}
+            </button>
+          </form>
+        </div>
+      </div>
+    )}
+
     {/* Add Worker form */}
     {showWorkerForm && (
       <div className="modal-background">
@@ -2015,6 +2190,13 @@ function ContractorApp() {
                 Other
               </option>
             </select>
+            {newWorker.trade && (
+              <p style={{ margin: "10px 0" }}>
+                Hourly rate: {tradeRates[newWorker.trade] !== undefined
+                  ? `$${Number(tradeRates[newWorker.trade]).toFixed(2)}/hr (trade default)`
+                  : "Not configured — set a rate in Manage Trade Rates"}
+              </p>
+            )}
             <label>
               Assign to Project
             </label>
